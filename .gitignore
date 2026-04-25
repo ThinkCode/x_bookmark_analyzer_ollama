@@ -1,0 +1,8 @@
+.playwright/
+.uv-cache/
+.venv/
+__pycache__/
+*.pyc
+bookmark_analysis.md
+bookmarks_cache.json
+.bookmark_analyzer_cookies.json

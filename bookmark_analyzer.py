@@ -1,41 +1,40 @@
 #!/usr/bin/env python3
 """
-Scrapes X bookmarks, fetches linked articles, summarizes each with Claude,
+Scrapes X bookmarks, fetches linked articles, summarizes each with Ollama,
 then gives an honest analysis of your interests and what to pursue next.
 
 Usage:
     python3 bookmark_analyzer.py
 
-Results saved to ~/bookmark_analysis.md
-Bookmarks cached to ~/bookmarks_cache.json (delete to re-scrape)
+Results are saved to your Obsidian vault when configured,
+otherwise to the directory where you run the script.
 
 Dependencies:
-    pip install anthropic httpx playwright browser-cookie3
+    pip install httpx playwright browser-cookie3
     playwright install chromium
 """
 import json
 import time
 import re
 import sys
-import shutil
 from pathlib import Path
 from html.parser import HTMLParser
 
 import httpx
-import anthropic
 
-CACHE = Path.home() / "bookmarks_cache.json"
-COOKIES = Path.home() / ".bookmark_analyzer_cookies.json"
-OUTPUT = Path.home() / "bookmark_analysis.md"
-MODEL = "claude-sonnet-4-6"
+MODEL = "gemma4:e2b"
+OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
+CDP_URL = "http://127.0.0.1:9222"
 
-# Optional: path to your Obsidian vault. Set to None to skip.
-OBSIDIAN_VAULT = None  # e.g. Path.home() / "Documents" / "My Vault"
+# Path.home() is your user home directory, for example /Users/kirankonathala.
+OBSIDIAN_VAULT = Path("/Volumes/Projects/Obsidian Vault")
 
-# Chromium executable — auto-detected, or override here
-CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+OUTPUT_DIR = OBSIDIAN_VAULT if OBSIDIAN_VAULT and OBSIDIAN_VAULT.exists() else Path.cwd()
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-client = anthropic.Anthropic()
+CACHE = OUTPUT_DIR / "bookmarks_cache.json"
+COOKIES = OUTPUT_DIR / ".bookmark_analyzer_cookies.json"
+OUTPUT = OUTPUT_DIR / "bookmark_analysis.md"
 
 
 # --- Article extraction ---
@@ -102,37 +101,37 @@ def scrape_bookmarks() -> list[dict]:
         print("Playwright not installed. Run:\n  pip install playwright && playwright install chromium")
         sys.exit(1)
 
-    if not CHROMIUM:
-        print("Chromium not found. Install it or set the CHROMIUM path manually in the script.")
-        sys.exit(1)
-
     bookmarks = []
     seen = set()
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path=CHROMIUM, headless=False)
+        print(f"Connecting to existing Chrome via CDP: {CDP_URL}")
+        print("Start Chrome yourself with remote debugging enabled, logged into X, then run this script.")
+        try:
+            browser = p.chromium.connect_over_cdp(CDP_URL)
+        except Exception:
+            print("\nCould not connect to Chrome over CDP.")
+            print("Launch Chrome with this command first:")
+            print('  open -na "Google Chrome" --args --remote-debugging-port=9222')
+            print("Then open x.com, log in, and run this script again.")
+            sys.exit(1)
 
-        if not COOKIES.exists():
-            print("Extracting cookies from your existing Chromium session...")
-            try:
-                import browser_cookie3
-            except ImportError:
-                print("browser-cookie3 not installed. Run:\n  pip install browser-cookie3")
-                sys.exit(1)
-            jar = browser_cookie3.chromium(domain_name='.x.com')
-            cookies_list = [
-                {"name": c.name, "value": c.value, "domain": c.domain,
-                 "path": c.path, "secure": bool(c.secure)}
-                for c in jar
-            ]
-            state = {"cookies": cookies_list, "origins": []}
-            COOKIES.write_text(json.dumps(state))
-            print(f"Extracted {len(cookies_list)} cookies.")
+        if browser.contexts:
+            context = browser.contexts[0]
+        else:
+            print("No Chrome context found after connecting.")
+            sys.exit(1)
 
-        context = browser.new_context(storage_state=str(COOKIES))
         page = context.new_page()
         page.goto("https://x.com/i/bookmarks")
-        page.wait_for_selector('[data-testid="tweet"]', timeout=15000)
+        try:
+            page.wait_for_selector('[data-testid="tweet"]', timeout=15000)
+        except Exception:
+            print("\nX bookmarks did not load yet.")
+            print("Log into X in your existing Chrome window, then press Enter here to continue.")
+            input()
+            page.goto("https://x.com/i/bookmarks")
+            page.wait_for_selector('[data-testid="tweet"]', timeout=120000)
 
         no_new = 0
         while no_new < 5:
@@ -189,7 +188,7 @@ def scrape_bookmarks() -> list[dict]:
             time.sleep(2.5)
             print(f"  {len(bookmarks)} bookmarks collected...", end="\r")
 
-        context.close()
+        page.close()
         browser.close()
 
     print(f"\nScraped {len(bookmarks)} bookmarks total.")
@@ -215,21 +214,40 @@ def enrich(bookmarks: list[dict]) -> list[dict]:
     return bookmarks
 
 
-# --- Claude calls ---
+# --- Ollama calls ---
+
+def ollama_chat(prompt: str, max_tokens: int) -> str:
+    try:
+        r = httpx.post(
+            OLLAMA_URL,
+            json={
+                "model": MODEL,
+                "stream": False,
+                "messages": [{"role": "user", "content": prompt}],
+                "options": {"num_predict": max_tokens},
+            },
+            timeout=120,
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data["message"]["content"].strip()
+    except httpx.RequestError as exc:
+        print(f"Ollama request failed: {exc}")
+        print("Make sure Ollama is running locally and the model is available:")
+        print(f"  ollama pull {MODEL}")
+        sys.exit(1)
+    except (KeyError, ValueError) as exc:
+        print(f"Unexpected Ollama response: {exc}")
+        sys.exit(1)
 
 def get_juice(b: dict) -> str:
     content = b["text"]
     if b.get("article_content"):
         content += f"\n\n[Article]: {b['article_content'][:2000]}"
-    msg = client.messages.create(
-        model=MODEL,
+    return ollama_chat(
+        f"In 1-2 sentences, what's the core idea here that would make someone save this?\n\n{content}",
         max_tokens=120,
-        messages=[{
-            "role": "user",
-            "content": f"In 1-2 sentences, what's the core idea here that would make someone save this?\n\n{content}"
-        }]
     )
-    return msg.content[0].text.strip()
 
 
 def summarize_all(bookmarks: list[dict]) -> list[dict]:
@@ -288,12 +306,7 @@ Give them:
 
 Tone: peer-level and honest. Not a cheerleader. Not therapy. You looked at their data and you're telling them what you see."""
 
-    msg = client.messages.create(
-        model=MODEL,
-        max_tokens=1500,
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return msg.content[0].text.strip()
+    return ollama_chat(prompt, max_tokens=15000)
 
 
 # --- Main ---
