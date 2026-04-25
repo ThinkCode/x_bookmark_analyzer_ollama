@@ -4,5 +4,6 @@
 __pycache__/
 *.pyc
 bookmark_analysis.md
+bookmark_dashboard_preview.html
 bookmarks_cache.json
 .bookmark_analyzer_cookies.json

@@ -1,6 +1,6 @@
 X Bookmark Analyzer
 
-Scrapes your X bookmarks, fetches linked articles, summarizes each one with Ollama, then gives you an honest analysis of what you actually care about and what to pursue next.
+Scrapes your X bookmarks, fetches linked articles, summarizes and categorizes each one with Ollama, then gives you both a written analysis and an interactive HTML dashboard.
 
 What Changed From The Original Script
 
@@ -8,6 +8,10 @@ What Changed From The Original Script
 - Uses `gemma4:e2b`
 - Uses `uv` for environment setup and running
 - Attaches to an already running Google Chrome instance over CDP instead of launching an automated browser for login
+- Categorizes bookmarks with Ollama
+- Stores derived bookmark timestamps in the cache
+- Incrementally adds only new bookmarks on future runs
+- Generates an interactive dashboard at `bookmark_dashboard.html`
 - Writes output files into your Obsidian vault when configured, otherwise into the directory where you run the script
 
 What It Does
@@ -15,9 +19,12 @@ What It Does
 - Connects to an existing Chrome instance that you start with remote debugging enabled
 - Opens your X bookmarks page in that Chrome session
 - Scrolls through and scrapes bookmarks
+- Extracts and stores bookmark timestamps from X status IDs
 - Fetches and reads linked articles
 - Summarizes each bookmark in 1-2 sentences with Ollama
+- Assigns a category label to each bookmark with Ollama
 - Runs a full analysis: themes, surprises, a clear direction, and tensions
+- Builds an HTML dashboard with category drilldowns, post previews, and usage trends
 
 Requirements
 
@@ -33,7 +40,6 @@ This repo includes [requirements.txt](/Users/username/x-bookmarks/x_bookmark_ana
 
 - `httpx`
 - `playwright`
-- `browser-cookie3`
 
 Setup With `uv`
 
@@ -54,13 +60,6 @@ Install dependencies:
 ```bash
 env UV_CACHE_DIR=$PWD/.uv-cache \
   ~/Library/Python/3.13/bin/uv pip install -r requirements.txt --python .venv/bin/python
-```
-
-Install Playwright's browser dependencies if needed:
-
-```bash
-env UV_CACHE_DIR=$PWD/.uv-cache \
-  ~/Library/Python/3.13/bin/uv run --python .venv/bin/python playwright install chromium
 ```
 
 Ollama Setup
@@ -118,7 +117,59 @@ env UV_CACHE_DIR=$PWD/.uv-cache \
   ~/Library/Python/3.13/bin/uv run --python .venv/bin/python bookmark_analyzer.py
 ```
 
+What Happens On Each Run
+
+- If `bookmarks_cache.json` already exists, the script loads it first
+- It then attempts to scrape only bookmarks whose IDs are not already in the cache
+- Missing fields are backfilled automatically, including `created_at`
+- Existing summaries and categories are reused
+- If Chrome/CDP is unavailable but cache already exists, the script can continue from cached data
+
 If the script cannot connect to Chrome over CDP, it means Chrome was not started with `--remote-debugging-port=9222` or the debugging instance is no longer running.
+
+Categorization Workflow
+
+Each bookmark is sent to the configured Ollama model twice:
+
+- once for a short 1-2 sentence summary stored as `juice`
+- once for a single category label stored as `category`
+
+The cache now also stores:
+
+- `created_at`, derived from the X status ID
+
+Example cached bookmark shape:
+
+```json
+{
+  "id": "2047955648357576920",
+  "created_at": "2026-04-25T08:27:30.401000+00:00",
+  "author": "Rahul",
+  "tweet_url": "https://x.com/i/web/status/2047955648357576920",
+  "juice": "A saved overview of how modern LLM behavior is engineered.",
+  "category": "LLM Engineering"
+}
+```
+
+Dashboard
+
+The script writes an interactive dashboard to:
+
+```text
+bookmark_dashboard.html
+```
+
+The dashboard includes:
+
+- clickable categories in a sidebar
+- bookmark cards grouped by category
+- timestamp, author, post link, and article link
+- excerpt and Ollama summary
+- embedded X post previews
+- monthly usage bars
+- a year/month heatmap
+- yearly bookmark totals
+- the overall written analysis
 
 Output Files
 
@@ -136,8 +187,8 @@ Output behavior:
 Files written:
 
 - `bookmarks_cache.json`
-- `.bookmark_analyzer_cookies.json`
 - `bookmark_analysis.md`
+- `bookmark_dashboard.html`
 
 Obsidian Notes
 
