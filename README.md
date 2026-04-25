@@ -146,7 +146,7 @@ If `OBSIDIAN_VAULT` exists, the script also reads Markdown notes from that vault
 In Python, `Path.home()` means your user home directory, for example:
 
 ```text
-/Users/kirankonathala
+/Users/username
 ```
 
 The script no longer uses `Path.home()` for output paths by default.
