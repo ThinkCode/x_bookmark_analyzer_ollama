@@ -24,9 +24,13 @@ import httpx
 MODEL = "gemma4:e2b"
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 CDP_URL = "http://127.0.0.1:9222"
+ENABLE_BOOKMARK_SUMMARIES = False
+FORCE_REBUILD_CATEGORIES = True
+ENABLE_OLLAMA_CATEGORY_FALLBACK = False
+CATEGORY_TAXONOMY_VERSION = "2026-04-25-v2"
 
 # Path.home() is your user home directory, for example /Users/kirankonathala.
-OBSIDIAN_VAULT = Path("/Volumes/Projects/Obsidian Vault")
+OBSIDIAN_VAULT = None # Path("/Volumes/Projects/Obsidian Vault")
 
 OUTPUT_DIR = OBSIDIAN_VAULT if OBSIDIAN_VAULT and OBSIDIAN_VAULT.exists() else Path.cwd()
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,8 +38,155 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 CACHE = OUTPUT_DIR / "bookmarks_cache.json"
 OUTPUT = OUTPUT_DIR / "bookmark_analysis.md"
 HTML_OUTPUT = OUTPUT_DIR / "bookmark_dashboard.html"
+CHECKPOINT = OUTPUT_DIR / "bookmark_checkpoint.json"
+RESUME_LOG = OUTPUT_DIR / "bookmark_resume.log"
 
 TWITTER_EPOCH = 1288834974657
+CHECKPOINT_EVERY = 10
+SCRAPE_TEST_LIMIT = None
+
+FOLDER_CATEGORIES = [
+    {
+        "category_name": "Artificial Intelligence (AI) & LLMs",
+        "description": "Topics covering the core concepts, models, training, and application of AI.",
+        "items": [
+            "AI Videos",
+            "LLM Finetuning",
+            "LLM Training",
+            "Gemma Models",
+            "Claude Skills",
+            "AI Model API Keys",
+            "LLM RAG",
+            "AI Agents",
+            "AI Agent Skills",
+            "AI Vision LLM",
+            "LLM Webscraper",
+            "Local LLM",
+            "Fine tuning DeepSeek",
+            "AI Prompts",
+            "AI Design Prompts",
+            "AI Use Cases",
+            "AI Investing",
+            "AI SEO",
+            "AI Tools Productivity",
+            "AI Planning & Execution",
+            "AI IDE",
+            "AI Autoresearch",
+            "Hermes",
+        ],
+    },
+    {
+        "category_name": "AI Tools & Agent Ecosystem",
+        "description": "Focuses on practical tools, frameworks, platforms, and agent development.",
+        "items": [
+            "Agent Web Stack",
+            "AI Tools for Agents",
+            "AI Software Costs",
+            "AI Github",
+            "AI API",
+            "OpenRouter",
+            "OpenClaw",
+            "AI Voice",
+            "Telegram Bots",
+            "Agentic Development",
+        ],
+    },
+    {
+        "category_name": "Programming & Development",
+        "description": "Guides and topics related to coding, scripting, infrastructure, and software development.",
+        "items": [
+            "Python",
+            "Python UV",
+            "Github",
+            "unsloth",
+            "Write Tests in Code",
+            "Web scraping",
+            "Git Ingest",
+            "Database Tips",
+            "Log Management",
+            "Server Optimization",
+            "MCP Server",
+            "Vector database",
+            "Tailscale",
+            "Codex",
+            "Dashboards",
+        ],
+    },
+    {
+        "category_name": "System & Infrastructure",
+        "description": "Topics related to hardware, hosting, operating systems, and deployment.",
+        "items": [
+            "Infrastructure hosting",
+            "Local AI",
+            "Mac Mini",
+            "Server Optimization",
+            "MCP",
+            "Buildings and Floor Plans",
+        ],
+    },
+    {
+        "category_name": "Personal & Professional Growth",
+        "description": "Covers career development, soft skills, personal finance, and self-improvement.",
+        "items": [
+            "Personal",
+            "Productivity",
+            "High Performer at Work",
+            "Entrepreneurship",
+            "Financial Wellness",
+            "Retirement",
+            "Immigration matters",
+            "Success stories",
+            "Content creator",
+            "Skills",
+            "LinkedIn Profile",
+        ],
+    },
+    {
+        "category_name": "Design & Creative Arts",
+        "description": "Content focused on visual design, art, and creative expression.",
+        "items": [
+            "iOS Design",
+            "Figma App design",
+            "Design Ideas",
+            "Painting hacks",
+            "Handpan",
+        ],
+    },
+    {
+        "category_name": "Health & Wellness",
+        "description": "Information related to physical fitness, health, and lifestyle.",
+        "items": [
+            "Health",
+            "Fitness",
+            "Healthy recipes",
+            "Dumbbell Bench",
+        ],
+    },
+    {
+        "category_name": "Learning & Knowledge",
+        "description": "Courses, academic topics, and educational content.",
+        "items": [
+            "Learning and Memory",
+            "AI Courses",
+            "Stanford courses",
+            "eBooks",
+            "Free Courses",
+            "Write Papers",
+            "Obsidian Memory",
+        ],
+    },
+    {
+        "category_name": "General & Miscellaneous",
+        "description": "Catch-all categories for unique or unrelated topics.",
+        "items": [
+            "Personal",
+            "Inspirational",
+            "AI Security",
+            "Security",
+            "AI Voice",
+        ],
+    },
+]
 
 
 # --- Article extraction ---
@@ -110,6 +261,63 @@ def clean_text(value: str) -> str:
     return re.sub(r"\s+", " ", (value or "")).strip()
 
 
+def normalize_label(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", clean_text(value).lower()).strip()
+
+
+FOLDER_CATEGORY_INDEX = {}
+for category in FOLDER_CATEGORIES:
+    for item in category["items"]:
+        FOLDER_CATEGORY_INDEX.setdefault(normalize_label(item), category["category_name"])
+
+CATEGORY_NAME_INDEX = {
+    normalize_label(category["category_name"]): category["category_name"]
+    for category in FOLDER_CATEGORIES
+}
+
+TAXONOMY_PROMPT_BLOCK = "\n\n".join(
+    (
+        f"{category['category_name']}\n"
+        f"Description: {category['description']}\n"
+        f"Folder examples: {', '.join(category['items'])}"
+    )
+    for category in FOLDER_CATEGORIES
+)
+
+
+def folder_category_from_name(folder_name: str) -> str:
+    return FOLDER_CATEGORY_INDEX.get(normalize_label(folder_name), "")
+
+
+def taxonomy_category_from_text(*values: str) -> str:
+    text = normalize_label(" ".join(value for value in values if value))
+    if not text:
+        return ""
+
+    for item, category_name in FOLDER_CATEGORY_INDEX.items():
+        if item and item in text:
+            return category_name
+    return ""
+
+
+def categorize_from_folder(bookmark: dict) -> str:
+    folder_category = folder_category_from_name(bookmark.get("folder_name", ""))
+    bookmark["folder_category"] = folder_category
+    return folder_category
+
+
+def categorize_from_taxonomy(bookmark: dict) -> str:
+    folder_category = categorize_from_folder(bookmark)
+    if folder_category:
+        return folder_category
+    return taxonomy_category_from_text(
+        bookmark.get("folder_name", ""),
+        bookmark.get("text", ""),
+        bookmark.get("juice", ""),
+        bookmark.get("article_content", ""),
+    )
+
+
 def ensure_bookmark_defaults(bookmark: dict) -> dict:
     b = dict(bookmark)
     b["id"] = str(b["id"])
@@ -121,6 +329,10 @@ def ensure_bookmark_defaults(bookmark: dict) -> dict:
     b.setdefault("article_content", "")
     b.setdefault("juice", "")
     b.setdefault("category", "")
+    b.setdefault("category_source", "")
+    b.setdefault("category_version", "")
+    b.setdefault("folder_name", "")
+    b["folder_category"] = folder_category_from_name(b.get("folder_name", ""))
     b.setdefault("created_at", timestamp_iso(b["id"]))
     return b
 
@@ -135,6 +347,107 @@ def save_cache(bookmarks: list[dict]) -> None:
     CACHE.write_text(json.dumps(bookmarks, indent=2))
 
 
+def load_checkpoint() -> dict[str, dict]:
+    if not CHECKPOINT.exists():
+        return {}
+    try:
+        data = json.loads(CHECKPOINT.read_text())
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(key): value for key, value in data.items() if isinstance(value, dict)}
+
+
+def save_checkpoint(bookmarks: list[dict]) -> None:
+    payload = {}
+    for bookmark in bookmarks:
+        entry = {}
+        if bookmark.get("juice"):
+            entry["juice"] = bookmark["juice"]
+        if bookmark.get("category"):
+            entry["category"] = bookmark["category"]
+            entry["category_source"] = bookmark.get("category_source", "")
+            entry["category_version"] = bookmark.get("category_version", "")
+        if entry:
+            payload[bookmark["id"]] = entry
+    CHECKPOINT.write_text(json.dumps(payload, indent=2))
+
+
+def apply_checkpoint(bookmarks: list[dict]) -> list[dict]:
+    checkpoint = load_checkpoint()
+    if not checkpoint:
+        return bookmarks
+
+    restored = 0
+    for bookmark in bookmarks:
+        entry = checkpoint.get(bookmark["id"])
+        if not entry:
+            continue
+        if entry.get("juice") and not bookmark.get("juice"):
+            bookmark["juice"] = entry["juice"]
+            restored += 1
+        if entry.get("category") and not bookmark.get("category"):
+            bookmark["category"] = entry["category"]
+            bookmark["category_source"] = entry.get("category_source", "")
+            bookmark["category_version"] = entry.get("category_version", "")
+            restored += 1
+
+    if restored:
+        print(f"Restored {restored} fields from {CHECKPOINT}")
+    return bookmarks
+
+
+def apply_summary_checkpoint(bookmarks: list[dict]) -> list[dict]:
+    checkpoint = load_checkpoint()
+    if not checkpoint:
+        return bookmarks
+
+    restored = 0
+    for bookmark in bookmarks:
+        entry = checkpoint.get(bookmark["id"])
+        if entry and entry.get("juice") and not bookmark.get("juice"):
+            bookmark["juice"] = entry["juice"]
+            restored += 1
+
+    if restored:
+        print(f"Restored {restored} summary fields from {CHECKPOINT}")
+    return bookmarks
+
+
+def append_resume_log(stage: str, completed: int, total: int) -> None:
+    timestamp = datetime.now(timezone.utc).isoformat()
+    RESUME_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with RESUME_LOG.open("a") as handle:
+        handle.write(f"{timestamp}\t{stage}\t{completed}/{total}\n")
+
+
+def persist_progress(bookmarks: list[dict], stage: str, completed: int, total: int, force: bool = False) -> None:
+    if total == 0:
+        return
+    if not force and completed % CHECKPOINT_EVERY != 0:
+        return
+    save_cache(bookmarks)
+    save_checkpoint(bookmarks)
+    append_resume_log(stage, completed, total)
+
+
+def reset_categories(bookmarks: list[dict]) -> list[dict]:
+    changed = 0
+    for bookmark in bookmarks:
+        folder_category = folder_category_from_name(bookmark.get("folder_name", ""))
+        if folder_category != bookmark.get("folder_category", ""):
+            bookmark["folder_category"] = folder_category
+        if bookmark.get("category") or bookmark.get("category_source") or bookmark.get("category_version"):
+            changed += 1
+        bookmark["category"] = ""
+        bookmark["category_source"] = ""
+        bookmark["category_version"] = ""
+    if changed:
+        print(f"Reset {changed} existing categories for taxonomy rebuild.")
+    return bookmarks
+
+
 def bookmark_dt(bookmark: dict) -> datetime:
     return datetime.fromisoformat(bookmark["created_at"])
 
@@ -146,9 +459,227 @@ def merge_bookmarks(existing: list[dict], new: list[dict]) -> list[dict]:
     return sorted(merged.values(), key=lambda b: b["created_at"], reverse=True)
 
 
+def cache_candidates() -> list[Path]:
+    candidates = [CACHE, Path.cwd() / "bookmarks_cache.json"]
+    unique = []
+    for path in candidates:
+        if path not in unique:
+            unique.append(path)
+    return unique
+
+
+def bookmark_completeness(bookmarks: list[dict]) -> tuple[int, int, int]:
+    return (
+        len(bookmarks),
+        sum(1 for b in bookmarks if b.get("juice")),
+        sum(1 for b in bookmarks if b.get("category")),
+    )
+
+
+def load_existing_bookmarks() -> list[dict]:
+    best_path = None
+    best_bookmarks = []
+    best_score = (-1, -1, -1)
+
+    for path in cache_candidates():
+        if not path.exists():
+            continue
+        try:
+            bookmarks = hydrate_bookmarks(json.loads(path.read_text()))
+        except Exception:
+            continue
+        score = bookmark_completeness(bookmarks)
+        if score > best_score:
+            best_path = path
+            best_bookmarks = bookmarks
+            best_score = score
+
+    if best_path:
+        print(f"Loading cache from {best_path}")
+        print(
+            "Cache status: "
+            f"{best_score[0]} bookmarks, {best_score[1]} summarized, {best_score[2]} categorized"
+        )
+    return best_bookmarks
+
+
 # --- Scraping ---
 
-def scrape_bookmarks(existing_ids: set[str] | None = None, allow_failure: bool = False) -> list[dict]:
+def extract_folder_names(page) -> list[str]:
+    blacklist = {
+        "all bookmarks",
+        "search bookmarks",
+        "bookmarks",
+        "back",
+        "new folder",
+        "bookmark",
+    }
+    names = []
+    seen = set()
+    selectors = [
+        '[data-testid="cellInnerDiv"]',
+        'a[href*="/i/bookmarks"]',
+        'div[role="button"]',
+    ]
+
+    for selector in selectors:
+        for el in page.query_selector_all(selector):
+            try:
+                text = clean_text(el.inner_text())
+            except Exception:
+                continue
+            if not text:
+                continue
+            text = text.split("\n")[0].strip()
+            normalized = normalize_label(text)
+            if (
+                not normalized
+                or normalized in blacklist
+                or len(text) > 60
+                or text.startswith("@")
+                or text.isdigit()
+            ):
+                continue
+            if text not in seen:
+                seen.add(text)
+                names.append(text)
+    return names
+
+
+def extract_bookmark_from_element(el, folder_name: str) -> dict | None:
+    link = el.query_selector('a[href*="/status/"]')
+    if not link:
+        return None
+
+    href = link.get_attribute("href") or ""
+    match = re.search(r"/status/(\d+)", href)
+    if not match:
+        return None
+
+    tid = match.group(1)
+    text_el = el.query_selector('[data-testid="tweetText"]')
+    text = text_el.inner_text() if text_el else ""
+
+    name_el = el.query_selector('[data-testid="User-Name"]')
+    author = (name_el.inner_text().split("\n")[0] if name_el else "").strip()
+
+    urls = []
+    for anchor in el.query_selector_all("a[href]"):
+        anchor_href = anchor.get_attribute("href") or ""
+        if anchor_href.startswith("http") and "x.com" not in anchor_href and "twitter.com" not in anchor_href:
+            urls.append(anchor_href)
+        elif "t.co/" in anchor_href and anchor_href.startswith("http"):
+            urls.append(anchor_href)
+
+    return {
+        "id": tid,
+        "author": author,
+        "text": text,
+        "tweet_url": f"https://x.com/i/web/status/{tid}",
+        "external_urls": sorted(set(urls)),
+        "resolved_urls": [],
+        "article_content": "",
+        "juice": "",
+        "category": "",
+        "folder_name": folder_name,
+        "folder_category": folder_category_from_name(folder_name),
+        "created_at": timestamp_iso(tid),
+    }
+
+
+def update_existing_folder_metadata(existing_by_id: dict[str, dict], bookmark: dict, folder_name: str) -> bool:
+    existing = existing_by_id.get(bookmark["id"])
+    if not existing:
+        return False
+    changed = False
+    if folder_name and existing.get("folder_name") != folder_name:
+        existing["folder_name"] = folder_name
+        changed = True
+    folder_category = folder_category_from_name(folder_name)
+    if folder_category and existing.get("folder_category") != folder_category:
+        existing["folder_category"] = folder_category
+        changed = True
+    return changed
+
+
+def collect_bookmarks_from_timeline(
+    page,
+    seen: set[str],
+    folder_name: str,
+    limit: int | None,
+    existing_by_id: dict[str, dict] | None = None,
+) -> tuple[list[dict], bool, int]:
+    bookmarks = []
+    metadata_updates = 0
+    no_new = 0
+    while no_new < 5:
+        tweet_els = page.query_selector_all('[data-testid="tweet"]')
+        new = 0
+
+        for el in tweet_els:
+            try:
+                bookmark = extract_bookmark_from_element(el, folder_name)
+                if not bookmark:
+                    continue
+                if bookmark["id"] in seen:
+                    if existing_by_id and update_existing_folder_metadata(existing_by_id, bookmark, folder_name):
+                        metadata_updates += 1
+                    continue
+                seen.add(bookmark["id"])
+                bookmarks.append(bookmark)
+                new += 1
+                if limit is not None and len(bookmarks) >= limit:
+                    return bookmarks, True, metadata_updates
+            except Exception:
+                continue
+
+        no_new = no_new + 1 if new == 0 else 0
+        page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        time.sleep(2.0)
+        print(f"  {len(bookmarks)} new bookmarks collected...", end="\r")
+
+    return bookmarks, False, metadata_updates
+
+
+def open_folder(page, folder_name: str) -> bool:
+    try:
+        page.get_by_text(folder_name, exact=True).first.click(timeout=5000)
+        page.wait_for_timeout(1500)
+        return True
+    except Exception:
+        return False
+
+
+def bookmarks_surface_ready(page) -> bool:
+    selectors = [
+        '[data-testid="tweet"]',
+        'input[placeholder*="Search Bookmarks"]',
+        '[data-testid="cellInnerDiv"]',
+    ]
+    for selector in selectors:
+        try:
+            if page.locator(selector).count() > 0:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def wait_for_bookmarks_surface(page, timeout_ms: int) -> bool:
+    deadline = time.time() + (timeout_ms / 1000.0)
+    while time.time() < deadline:
+        if bookmarks_surface_ready(page):
+            return True
+        page.wait_for_timeout(750)
+    return bookmarks_surface_ready(page)
+
+
+def scrape_bookmarks(
+    existing_ids: set[str] | None = None,
+    allow_failure: bool = False,
+    stop_on_first_stale_folder: bool = False,
+    existing_bookmarks: list[dict] | None = None,
+) -> list[dict]:
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -160,6 +691,9 @@ def scrape_bookmarks(existing_ids: set[str] | None = None, allow_failure: bool =
     existing_ids = existing_ids or set()
     bookmarks = []
     seen = set(existing_ids)
+    limit = SCRAPE_TEST_LIMIT
+    existing_by_id = {bookmark["id"]: bookmark for bookmark in existing_bookmarks or []}
+    metadata_updates = 0
 
     with sync_playwright() as p:
         print(f"Connecting to existing Chrome via CDP: {CDP_URL}")
@@ -186,9 +720,7 @@ def scrape_bookmarks(existing_ids: set[str] | None = None, allow_failure: bool =
         context = browser.contexts[0]
         page = context.new_page()
         page.goto("https://x.com/i/bookmarks")
-        try:
-            page.wait_for_selector('[data-testid="tweet"]', timeout=15000)
-        except Exception:
+        if not wait_for_bookmarks_surface(page, 15000):
             if allow_failure:
                 print("Bookmarks did not load from Chrome. Continuing with cached bookmarks only.")
                 page.close()
@@ -198,70 +730,55 @@ def scrape_bookmarks(existing_ids: set[str] | None = None, allow_failure: bool =
             print("Log into X in your Chrome window, then press Enter here to continue.")
             input()
             page.goto("https://x.com/i/bookmarks")
-            page.wait_for_selector('[data-testid="tweet"]', timeout=120000)
+            if not wait_for_bookmarks_surface(page, 120000):
+                print("Still could not detect the bookmarks page after waiting.")
+                page.close()
+                browser.close()
+                sys.exit(1)
 
-        no_new = 0
-        while no_new < 5:
-            tweet_els = page.query_selector_all('[data-testid="tweet"]')
-            new = 0
+        page.wait_for_timeout(1500)
+        folder_names = extract_folder_names(page)
 
-            for el in tweet_els:
-                try:
-                    link = el.query_selector('a[href*="/status/"]')
-                    if not link:
-                        continue
-
-                    href = link.get_attribute("href") or ""
-                    match = re.search(r"/status/(\d+)", href)
-                    if not match:
-                        continue
-
-                    tid = match.group(1)
-                    if tid in seen:
-                        continue
-
-                    seen.add(tid)
-                    new += 1
-
-                    text_el = el.query_selector('[data-testid="tweetText"]')
-                    text = text_el.inner_text() if text_el else ""
-
-                    name_el = el.query_selector('[data-testid="User-Name"]')
-                    author = (name_el.inner_text().split("\n")[0] if name_el else "").strip()
-
-                    urls = []
-                    for anchor in el.query_selector_all("a[href]"):
-                        anchor_href = anchor.get_attribute("href") or ""
-                        if anchor_href.startswith("http") and "x.com" not in anchor_href and "twitter.com" not in anchor_href:
-                            urls.append(anchor_href)
-                        elif "t.co/" in anchor_href and anchor_href.startswith("http"):
-                            urls.append(anchor_href)
-
-                    bookmarks.append(
-                        {
-                            "id": tid,
-                            "author": author,
-                            "text": text,
-                            "tweet_url": f"https://x.com/i/web/status/{tid}",
-                            "external_urls": sorted(set(urls)),
-                            "resolved_urls": [],
-                            "article_content": "",
-                            "juice": "",
-                            "category": "",
-                            "created_at": timestamp_iso(tid),
-                        }
-                    )
-                except Exception:
+        if folder_names:
+            print(f"Found {len(folder_names)} bookmark folders. Test mode limit: {limit} bookmarks.")
+            for folder_name in folder_names:
+                if limit is not None and len(bookmarks) >= limit:
+                    break
+                print(f"\nOpening folder: {folder_name}")
+                if not open_folder(page, folder_name):
                     continue
-
-            no_new = no_new + 1 if new == 0 else 0
-            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            time.sleep(2.5)
-            print(f"  {len(bookmarks)} new bookmarks collected...", end="\r")
+                folder_bookmarks, reached_limit, folder_metadata_updates = collect_bookmarks_from_timeline(
+                    page,
+                    seen,
+                    folder_name,
+                    None if limit is None else max(limit - len(bookmarks), 0),
+                    existing_by_id,
+                )
+                bookmarks.extend(folder_bookmarks)
+                metadata_updates += folder_metadata_updates
+                if reached_limit:
+                    break
+                if stop_on_first_stale_folder and not folder_bookmarks:
+                    print(f"\nNo new bookmarks in folder '{folder_name}'. Stopping incremental scan.")
+                    break
+                page.goto("https://x.com/i/bookmarks")
+                page.wait_for_timeout(1500)
+        else:
+            fallback_bookmarks, _, folder_metadata_updates = collect_bookmarks_from_timeline(
+                page,
+                seen,
+                "",
+                limit,
+                existing_by_id,
+            )
+            bookmarks.extend(fallback_bookmarks)
+            metadata_updates += folder_metadata_updates
 
         page.close()
         browser.close()
 
+    if metadata_updates:
+        print(f"\nUpdated folder metadata for {metadata_updates} existing bookmarks.")
     print(f"\nScraped {len(bookmarks)} new bookmarks.")
     return bookmarks
 
@@ -289,7 +806,7 @@ def enrich(bookmarks: list[dict]) -> list[dict]:
 
 # --- Ollama calls ---
 
-def ollama_chat(prompt: str, max_tokens: int) -> str:
+def ollama_chat(prompt: str, max_tokens: int, timeout: float = 120) -> str:
     try:
         r = httpx.post(
             OLLAMA_URL,
@@ -299,7 +816,7 @@ def ollama_chat(prompt: str, max_tokens: int) -> str:
                 "messages": [{"role": "user", "content": prompt}],
                 "options": {"num_predict": max_tokens},
             },
-            timeout=120,
+            timeout=timeout,
         )
         r.raise_for_status()
         data = r.json()
@@ -325,49 +842,133 @@ def get_juice(bookmark: dict) -> str:
 
 
 def get_category(bookmark: dict) -> str:
+    taxonomy_category = categorize_from_taxonomy(bookmark)
+    if taxonomy_category:
+        return taxonomy_category
+
+    if not ENABLE_OLLAMA_CATEGORY_FALLBACK:
+        return "Uncategorized"
+
     content = clean_text(bookmark.get("juice") or bookmark.get("text") or "")
     article = clean_text(bookmark.get("article_content", ""))[:1000]
-    prompt = f"""Assign exactly one category label to this X bookmark.
+    folder_name = clean_text(bookmark.get("folder_name", ""))
+    prompt = f"""Categorize this X bookmark using the taxonomy below.
 
-Rules:
-- 2 to 4 words
-- title case
-- specific, not generic
-- no punctuation
-- return only the label
+            Prefer returning exactly one existing taxonomy category name.
+            If none fit well enough, create a short new category label in Title Case.
+            Return only the category label. No explanation.
 
-Bookmark text:
-{content}
+            Taxonomy:
+            {TAXONOMY_PROMPT_BLOCK}
 
-Article excerpt:
-{article}
-"""
-    category = ollama_chat(prompt, max_tokens=20).splitlines()[0].strip().strip('"').strip("'")
-    category = re.sub(r"[^A-Za-z0-9 /&+-]", "", category).strip() or "Uncategorized"
-    return category[:40]
+            Folder name metadata:
+            {folder_name or "(none)"}
+
+            Bookmark text:
+            {content or "(none)"}
+
+            Article excerpt:
+            {article or "(none)"}
+            """
+    fallback_parts = []
+    if folder_name:
+        fallback_parts.append(folder_name)
+    if content:
+        fallback_parts.append(content)
+    if article:
+        fallback_parts.append(article)
+    fallback_source = " ".join(fallback_parts).strip()
+
+    for _ in range(2):
+        raw = ollama_chat(prompt, max_tokens=20).strip()
+        first_line = raw.splitlines()[0].strip() if raw.splitlines() else ""
+        category = re.sub(r"[^A-Za-z0-9 /&+-]", "", first_line.strip('"').strip("'")).strip()
+        if category:
+            matched_taxonomy = CATEGORY_NAME_INDEX.get(normalize_label(category))
+            if matched_taxonomy:
+                return matched_taxonomy
+            return category[:40]
+
+    if fallback_source:
+        words = re.findall(r"[A-Za-z0-9][A-Za-z0-9&+-]*", fallback_source)
+        if words:
+            return " ".join(word.capitalize() for word in words[:3])[:40]
+
+    return "Uncategorized"
 
 
 def summarize_all(bookmarks: list[dict]) -> list[dict]:
+    if not ENABLE_BOOKMARK_SUMMARIES:
+        print("\nSkipping per-bookmark summaries. Using raw text/article content instead.")
+        return bookmarks
     pending = sum(1 for b in bookmarks if not b.get("juice"))
     print(f"\nSummarizing {len(bookmarks)} bookmarks... ({pending} pending)")
+    completed = 0
     for i, bookmark in enumerate(bookmarks):
         if bookmark.get("juice"):
             continue
         print(f"  {i+1}/{len(bookmarks)}: @{bookmark['author'][:25]}", end="\r")
         bookmark["juice"] = get_juice(bookmark)
-        save_cache(bookmarks)
+        completed += 1
+        persist_progress(bookmarks, "summarize", completed, pending)
+    persist_progress(bookmarks, "summarize", completed, pending, force=True)
     return bookmarks
 
 
 def categorize_all(bookmarks: list[dict]) -> list[dict]:
     pending = sum(1 for b in bookmarks if not b.get("category"))
     print(f"\nCategorizing {len(bookmarks)} bookmarks... ({pending} pending)")
+    completed = 0
+    folder_hits = 0
+    taxonomy_hits = 0
+    ollama_hits = 0
+    uncategorized_hits = 0
     for i, bookmark in enumerate(bookmarks):
         if bookmark.get("category"):
             continue
         print(f"  {i+1}/{len(bookmarks)}: @{bookmark['author'][:25]}", end="\r")
+        folder_category = categorize_from_folder(bookmark)
+        if folder_category:
+            bookmark["category"] = folder_category
+            bookmark["category_source"] = "folder_taxonomy"
+            bookmark["category_version"] = CATEGORY_TAXONOMY_VERSION
+            completed += 1
+            folder_hits += 1
+            persist_progress(bookmarks, "categorize", completed, pending)
+            continue
+
+        taxonomy_category = taxonomy_category_from_text(
+            bookmark.get("text", ""),
+            bookmark.get("juice", ""),
+            bookmark.get("article_content", ""),
+        )
+        if taxonomy_category:
+            bookmark["category"] = taxonomy_category
+            bookmark["category_source"] = "taxonomy_keyword"
+            bookmark["category_version"] = CATEGORY_TAXONOMY_VERSION
+            completed += 1
+            taxonomy_hits += 1
+            persist_progress(bookmarks, "categorize", completed, pending)
+            continue
+
         bookmark["category"] = get_category(bookmark)
-        save_cache(bookmarks)
+        bookmark["category_source"] = "ollama_taxonomy" if bookmark["category"] != "Uncategorized" else "taxonomy_unmatched"
+        bookmark["category_version"] = CATEGORY_TAXONOMY_VERSION
+        completed += 1
+        if bookmark["category"] == "Uncategorized":
+            uncategorized_hits += 1
+        else:
+            ollama_hits += 1
+        persist_progress(bookmarks, "categorize", completed, pending)
+    persist_progress(bookmarks, "categorize", completed, pending, force=True)
+    if pending:
+        print(
+            f"\nCategorized {pending} bookmarks: "
+            f"{folder_hits} from folder taxonomy, "
+            f"{taxonomy_hits} from taxonomy keywords, "
+            f"{ollama_hits} via Ollama, "
+            f"{uncategorized_hits} unmatched."
+        )
     return bookmarks
 
 
@@ -385,18 +986,53 @@ def read_obsidian() -> str:
     return "\n\n".join(notes)
 
 
+def build_analysis_digest(bookmarks: list[dict]) -> str:
+    category_buckets = {}
+    for bookmark in bookmarks:
+        category = bookmark.get("category") or "Uncategorized"
+        category_buckets.setdefault(category, []).append(bookmark)
+
+    lines = []
+    for category, items in sorted(category_buckets.items(), key=lambda pair: len(pair[1]), reverse=True)[:12]:
+        lines.append(f"## {category} ({len(items)})")
+        for bookmark in items[:4]:
+            summary = clean_text(bookmark.get("juice") or bookmark.get("text") or "")
+            if len(summary) > 180:
+                summary = summary[:179].rstrip() + "…"
+            line = f"- {bookmark['created_at']} | @{bookmark['author']}: {summary}"
+            if bookmark["resolved_urls"]:
+                line += f" | {bookmark['resolved_urls'][0]}"
+            lines.append(line)
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 def analyze(bookmarks: list[dict], obsidian: str) -> str:
-    bookmark_digest = "\n\n".join(
-        f"{b['created_at']} | @{b['author']} | {b['category']}: {b['juice']}"
-        + (f"\nLink: {b['resolved_urls'][0]}" if b["resolved_urls"] else "")
-        for b in bookmarks[:250]
+    category_counts = Counter(b.get("category") or "Uncategorized" for b in bookmarks)
+    yearly_counts = Counter(year_key(b) for b in bookmarks)
+    top_categories = "\n".join(
+        f"- {category}: {count}"
+        for category, count in category_counts.most_common(12)
     )
+    yearly_summary = "\n".join(
+        f"- {year}: {count}"
+        for year, count in sorted(yearly_counts.items())
+    )
+    bookmark_digest = build_analysis_digest(bookmarks)
 
     obsidian_section = obsidian if obsidian else "(No Obsidian notes provided.)"
 
     prompt = f"""You're doing an honest, direct analysis of someone's X bookmarks.
 
-Here are their bookmarks, with timestamps, categories, and summaries:
+Here is the bookmark distribution by category:
+
+{top_categories}
+
+Here is the bookmark distribution by year:
+
+{yearly_summary}
+
+Here is a representative sample of bookmarks, grouped by category:
 
 {bookmark_digest}
 
@@ -412,7 +1048,7 @@ Give them:
 
 Keep it sharp, specific, and peer-level."""
 
-    return ollama_chat(prompt, max_tokens=1800)
+    return ollama_chat(prompt, max_tokens=1800, timeout=600)
 
 
 # --- Output helpers ---
@@ -465,6 +1101,8 @@ def build_dashboard_data(bookmarks: list[dict]) -> dict:
                         "text": b["text"],
                         "juice": b.get("juice", ""),
                         "category": b.get("category", "Uncategorized"),
+                        "folder_name": b.get("folder_name", ""),
+                        "folder_category": b.get("folder_category", ""),
                         "created_at": b["created_at"],
                         "created_label": bookmark_dt(b).strftime("%Y-%m-%d %H:%M UTC"),
                         "excerpt": short_excerpt(b),
@@ -948,6 +1586,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           <div class="meta">
             <span class="pill">${{bookmark.created_label}}</span>
             <span class="pill">@${{bookmark.author || "unknown"}}</span>
+            ${{bookmark.folder_name ? `<span class="pill">Folder: ${{bookmark.folder_name}}</span>` : ""}}
           </div>
           <p class="excerpt">${{bookmark.excerpt || ""}}</p>
           <p class="summary">${{bookmark.juice || ""}}</p>
@@ -1007,7 +1646,9 @@ def write_markdown(bookmarks: list[dict], analysis: str) -> None:
     for bookmark in bookmarks:
         timestamp = bookmark_dt(bookmark).strftime("%Y-%m-%d %H:%M UTC")
         out.append(f"**{timestamp} — @{bookmark['author']} — {bookmark['category']}**")
-        out.append(bookmark.get("juice", ""))
+        if bookmark.get("folder_name"):
+            out.append(f"Folder: {bookmark['folder_name']}")
+        out.append(bookmark.get("juice") or short_excerpt(bookmark, length=320))
         out.append(f"<{bookmark['tweet_url']}>")
         if bookmark.get("resolved_urls"):
             out.append(f"<{bookmark['resolved_urls'][0]}>")
@@ -1019,24 +1660,41 @@ def write_markdown(bookmarks: list[dict], analysis: str) -> None:
 # --- Main ---
 
 def main() -> None:
-    existing = hydrate_bookmarks(json.loads(CACHE.read_text())) if CACHE.exists() else []
+    existing = load_existing_bookmarks()
+    if FORCE_REBUILD_CATEGORIES and existing:
+        existing = apply_summary_checkpoint(existing)
+        existing = reset_categories(existing)
+        save_cache(existing)
+        save_checkpoint(existing)
+    else:
+        existing = apply_checkpoint(existing)
 
     if existing:
-        print(f"Loading cached bookmarks from {CACHE}")
+        missing_folder_metadata = sum(1 for bookmark in existing if not bookmark.get("folder_name"))
+        stop_on_first_stale_folder = missing_folder_metadata == 0
+        if missing_folder_metadata:
+            print(f"Backfilling folder metadata for {missing_folder_metadata} cached bookmarks before using early-stop scanning.")
         print("Attempting to fetch only new bookmarks since the last run...")
-        new_bookmarks = scrape_bookmarks({b["id"] for b in existing}, allow_failure=True)
+        new_bookmarks = scrape_bookmarks(
+            {b["id"] for b in existing},
+            allow_failure=True,
+            stop_on_first_stale_folder=stop_on_first_stale_folder,
+            existing_bookmarks=existing,
+        )
     else:
         new_bookmarks = scrape_bookmarks()
 
     new_bookmarks = hydrate_bookmarks(new_bookmarks)
     bookmarks = merge_bookmarks(existing, new_bookmarks)
     save_cache(bookmarks)
+    save_checkpoint(bookmarks)
 
     bookmarks = enrich(bookmarks)
     bookmarks = summarize_all(bookmarks)
     bookmarks = categorize_all(bookmarks)
     bookmarks = hydrate_bookmarks(bookmarks)
     save_cache(bookmarks)
+    save_checkpoint(bookmarks)
 
     obsidian = read_obsidian()
     print("\nRunning interest analysis...")
