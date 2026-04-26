@@ -2,6 +2,8 @@ X Bookmark Analyzer
 
 Scrapes your X bookmarks, fetches linked articles, categorizes them with folder taxonomy/Ollama fallback, then gives you both a written analysis and an interactive HTML dashboard.
 
+![X Bookmark Analyzer flow](docs/x-bookmark-analyzer-flow.png)
+
 What Changed From The Original Script
 
 - Uses local Ollama instead of Anthropic Claude
