@@ -541,26 +541,16 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     }}
     .trend-up   {{ color: #0ea571; background: color-mix(in srgb, #0ea571 14%, transparent); }}
     .trend-down {{ color: #ef4444; background: color-mix(in srgb, #ef4444 14%, transparent); }}
-    /* Categories card: number left, treemap right */
+    /* Categories card: same stat rhythm as month/year, treemap underneath */
     .mcard-cats {{
-      display: flex;
-      align-items: stretch;
-      gap: 8px;
+      display: block;
       flex: 1;
       min-height: 0;
       margin-top: auto;
       padding-top: 4px;
     }}
-    .cats-nums {{
-      flex-shrink: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      min-width: 0;
-    }}
     .cats-treemap {{
-      flex: 1;
-      min-width: 0;
+      width: 100%;
       min-height: 36px;
       display: flex;
       align-items: stretch;
@@ -1150,13 +1140,11 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           <!-- Categories + treemap -->
           <div class="mcard">
             <div class="mcard-lbl">Categories <span id="stat-categories" class="mcard-meta" style="margin-left:3px"></span></div>
+            <div class="mcard-primary">
+              <span id="stat-total" class="mcard-num"></span>
+              <span class="mcard-sub">total bookmarks</span>
+            </div>
             <div class="mcard-cats">
-              <div class="cats-nums">
-                <div class="mcard-primary">
-                  <span id="stat-total" class="mcard-num"></span>
-                </div>
-                <div class="mcard-sub">total bookmarks</div>
-              </div>
               <div id="categories-treemap" class="cats-treemap"></div>
             </div>
           </div>
