@@ -1,6 +1,6 @@
 X Bookmark Analyzer
 
-Scrapes your X bookmarks, fetches linked articles, summarizes and categorizes each one with Ollama, then gives you both a written analysis and an interactive HTML dashboard.
+Scrapes your X bookmarks, fetches linked articles, categorizes them with folder taxonomy/Ollama fallback, then gives you both a written analysis and an interactive HTML dashboard.
 
 What Changed From The Original Script
 
@@ -13,6 +13,7 @@ What Changed From The Original Script
 - Incrementally adds only new bookmarks on future runs
 - Generates an interactive dashboard at `bookmark_dashboard.html`
 - Writes output files into your Obsidian vault when configured, otherwise into the directory where you run the script
+- Uses a modular package layout under `x_bookmark_analyzer/` for readability
 
 What It Does
 
@@ -24,7 +25,26 @@ What It Does
 - Summarizes each bookmark in 1-2 sentences with Ollama
 - Assigns a category label to each bookmark with Ollama
 - Runs a full analysis: themes, surprises, a clear direction, and tensions
-- Builds an HTML dashboard with category drilldowns, post previews, and usage trends
+- Builds an HTML dashboard with category drilldowns, clickable tags, heatmap filtering, and usage trends
+
+Project Layout
+
+The CLI entry point is still:
+
+```text
+bookmark_analyzer.py
+```
+
+The implementation is split into focused modules:
+
+- `x_bookmark_analyzer/config.py`: model settings, output paths, Chrome/CDP settings, and folder taxonomy
+- `x_bookmark_analyzer/models.py`: bookmark normalization, timestamp extraction, cache handling, taxonomy matching, and checkpoints
+- `x_bookmark_analyzer/scraper.py`: Chrome CDP connection, X bookmark folder scraping, and incremental collection
+- `x_bookmark_analyzer/article.py`: URL resolution and lightweight article text extraction
+- `x_bookmark_analyzer/enrichment.py`: external URL/article enrichment workflow
+- `x_bookmark_analyzer/llm.py`: Ollama calls, summaries, categorization, and interest analysis
+- `x_bookmark_analyzer/dashboard.py`: Markdown output, dashboard data shaping, and HTML rendering
+- `x_bookmark_analyzer/app.py`: end-to-end orchestration
 
 Requirements
 
@@ -124,19 +144,24 @@ What Happens On Each Run
 - Missing fields are backfilled automatically, including `created_at`
 - Existing summaries and categories are reused
 - If Chrome/CDP is unavailable but cache already exists, the script can continue from cached data
+- If no new bookmarks are found, the previous interest analysis is reused instead of re-running Ollama analysis
 
 If the script cannot connect to Chrome over CDP, it means Chrome was not started with `--remote-debugging-port=9222` or the debugging instance is no longer running.
 
 Categorization Workflow
 
-Each bookmark is sent to the configured Ollama model twice:
+Categorization now prefers cheap deterministic metadata before using the model:
 
-- once for a short 1-2 sentence summary stored as `juice`
-- once for a single category label stored as `category`
+- If a bookmark's X folder name appears in the configured taxonomy, that folder determines the category
+- If folder metadata is unavailable, taxonomy keyword matching is attempted
+- Ollama category fallback is disabled by default and only used when explicitly enabled
+- Per-bookmark summaries are disabled by default to save compute; the dashboard uses raw text/article content instead
 
 The cache now also stores:
 
 - `created_at`, derived from the X status ID
+- `folder_name`, scraped from X bookmark folders when available
+- `folder_category`, derived from the configured taxonomy
 
 Example cached bookmark shape:
 
@@ -162,21 +187,23 @@ bookmark_dashboard.html
 The dashboard includes:
 
 - clickable categories in a sidebar
+- clickable tag cloud terms that filter matching posts
 - bookmark cards grouped by category
 - timestamp, author, post link, and article link
-- excerpt and Ollama summary
-- embedded X post previews
+- compact excerpts and optional article links
+- lazy-loaded cards for better performance
 - monthly usage bars
 - a year/month heatmap
 - yearly bookmark totals
-- the overall written analysis
+- a Markdown-formatted "What Your Bookmarks Say" analysis that can expand/collapse
+- light and dark mode
 
 Output Files
 
 The script currently sets:
 
 ```python
-OBSIDIAN_VAULT = Path("/Volumes/Projects/Obsidian Vault")
+OBSIDIAN_VAULT = None
 ```
 
 Output behavior:
