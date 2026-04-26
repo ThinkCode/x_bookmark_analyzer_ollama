@@ -4,6 +4,12 @@ Scrapes your X bookmarks, fetches linked articles, categorizes them with folder 
 
 ![X Bookmark Analyzer flow](docs/x-bookmark-analyzer-flow.png)
 
+Demo
+
+![Dark Mode Web](docs/xbookmarks_dark.png)
+
+![Dark Mode Light](docs/xbookmarks_light.png)
+
 What Changed From The Original Script
 
 - Uses local Ollama instead of Anthropic Claude
