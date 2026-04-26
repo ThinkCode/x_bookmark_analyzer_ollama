@@ -463,55 +463,110 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     }}
 
     /* === Main === */
-    .main {{ padding: 24px 24px 52px; }}
+    .main {{ padding: 18px 24px 52px; }}
 
-    /* Hero */
-    .hero {{
+    /* Top zone: left 50% metrics stack, right 50% heatmap */
+    .top-zone {{
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: stretch;
     }}
-    .stat {{
+    .metrics-stack {{
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }}
+    /* Compact metric card */
+    .mcard {{
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 18px 18px 16px;
+      padding: 9px 14px 10px;
       box-shadow: var(--shadow-xs);
-      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
       overflow: hidden;
+      flex: 1;
       transition: box-shadow 160ms, border-color 160ms;
     }}
-    .stat:hover {{
+    .mcard:hover {{
       box-shadow: var(--shadow-sm);
       border-color: color-mix(in srgb, var(--accent) 22%, transparent);
     }}
-    .stat::after {{
-      content: '';
-      position: absolute;
-      inset: 0 0 auto 0;
-      height: 2px;
-      background: linear-gradient(90deg, var(--accent), var(--accent-2));
-      opacity: 0;
-      transition: opacity 200ms;
-    }}
-    .stat:hover::after {{ opacity: 1; }}
-    .stat .label {{
-      font-size: 0.68rem;
+    .mcard-lbl {{
+      font-size: 0.53rem;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
       color: var(--ink-3);
-      margin-bottom: 8px;
+      margin-bottom: 1px;
     }}
-    .stat .value {{
-      font-size: 2rem;
+    .mcard-primary {{
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      flex-wrap: wrap;
+    }}
+    .mcard-num {{
+      font-size: 1.85rem;
       font-weight: 800;
-      letter-spacing: -0.045em;
+      letter-spacing: -0.04em;
       line-height: 1;
-      font-variant-numeric: tabular-nums;
       color: var(--ink);
+      font-variant-numeric: tabular-nums;
     }}
+    .mcard-meta {{
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: var(--ink-3);
+      background: color-mix(in srgb, var(--ink) 6%, transparent);
+      border-radius: var(--pill);
+      padding: 1px 6px;
+    }}
+    .mcard-sub {{
+      font-size: 0.6rem;
+      color: var(--ink-3);
+    }}
+    .mcard-spark {{ line-height: 0; margin-top: 3px; }}
+    .mcard-spark svg {{ display: block; width: 100%; height: 22px; }}
+    /* Trend badge — inline next to number */
+    .trend-badge {{
+      font-size: 0.6rem;
+      font-weight: 700;
+      border-radius: var(--pill);
+      padding: 1px 6px;
+      align-self: center;
+    }}
+    .trend-up   {{ color: #0ea571; background: color-mix(in srgb, #0ea571 14%, transparent); }}
+    .trend-down {{ color: #ef4444; background: color-mix(in srgb, #ef4444 14%, transparent); }}
+    /* Categories card: number left, treemap right */
+    .mcard-cats {{
+      display: flex;
+      align-items: stretch;
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+      padding-top: 2px;
+    }}
+    .cats-nums {{
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }}
+    .cats-treemap {{
+      flex: 1;
+      min-width: 0;
+      min-height: 40px;
+      display: flex;
+      align-items: stretch;
+      border-radius: 5px;
+      overflow: hidden;
+    }}
+    .cats-treemap svg {{ flex: 1; border-radius: 5px; }}
 
     /* Panels */
     .panel {{
@@ -535,25 +590,98 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       color: var(--ink-3);
     }}
 
-    /* Analysis */
-    .analysis-section {{ margin-bottom: 16px; }}
+    /* Analysis strip */
+    .analysis-strip {{ margin-bottom: 12px; }}
+    .analysis-strip .panel {{
+      padding: 12px 18px;
+      border-left: 3px solid var(--accent);
+    }}
+    .analysis-strip-hd {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }}
+    .strip-icon {{
+      flex-shrink: 0;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      color: var(--accent);
+      display: grid;
+      place-items: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      line-height: 1;
+    }}
+    .strip-badge {{
+      flex-shrink: 0;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }}
+    .analysis-teaser {{
+      flex: 1;
+      margin: 0;
+      font-size: 0.82rem;
+      color: var(--ink-2);
+      font-style: italic;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }}
+    .analysis-show-btn {{
+      flex-shrink: 0;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 0;
+      white-space: nowrap;
+      transition: opacity 120ms;
+    }}
+    .analysis-show-btn:hover {{ opacity: 0.75; }}
+    .analysis-expanded {{
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }}
+    /* Sidebar section headers */
+    .nav-section-hd {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }}
+    .nav-section-hd .nav-label {{ margin-bottom: 0; }}
+    .sidebar-clear-btn {{
+      font-size: 0.65rem;
+      font-weight: 600;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font: inherit;
+      padding: 0;
+      opacity: 0.75;
+      transition: opacity 120ms;
+    }}
+    .sidebar-clear-btn:hover {{ opacity: 1; text-decoration: underline; }}
+    /* Tag count inline */
+    .tag-count {{
+      font-size: 0.7em;
+      font-weight: 400;
+      opacity: 0.55;
+    }}
+    /* Analysis content */
     .analysis {{
       color: var(--ink);
       line-height: 1.7;
       font-size: 0.9rem;
-    }}
-    .analysis.collapsed {{
-      max-height: 11rem;
-      overflow: hidden;
-      position: relative;
-    }}
-    .analysis.collapsed::after {{
-      content: "";
-      position: absolute;
-      left: 0; right: 0; bottom: 0;
-      height: 5rem;
-      background: linear-gradient(transparent, var(--surface));
-      pointer-events: none;
     }}
     .analysis h2 {{ font-size: 1rem; font-weight: 700; margin: 1.1rem 0 0.35rem; color: var(--ink); }}
     .analysis h3 {{ font-size: 0.93rem; font-weight: 700; margin: 0.9rem 0 0.3rem; color: var(--ink); }}
@@ -634,110 +762,70 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     }}
     .analysis-toggle {{ margin-top: 12px; }}
 
-    /* Charts */
-    .chart-grid {{
-      display: grid;
-      grid-template-columns: minmax(380px, 1.5fr) minmax(200px, 0.65fr);
-      gap: 12px;
-      margin-bottom: 16px;
-    }}
-    .mini-chart-stack {{ display: grid; gap: 12px; }}
-
-    /* Bars */
-    .bars {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
-      align-items: end;
-      gap: 4px;
-      height: 160px;
-      overflow: visible;
-    }}
-    .bar-wrap {{
+    /* Heatmap — right panel inside top-zone */
+    .top-heatmap {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px 12px;
+      box-shadow: var(--shadow-xs);
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 4px;
-      height: 100%;
-      position: relative;
+      overflow: hidden;
     }}
-    .bar-wrap:hover .bar-tip {{
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
+    .top-heatmap .panel-hd {{ margin-bottom: 6px; flex-shrink: 0; }}
+    .heatmap {{
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 0;
     }}
-    .bar-tip {{
-      position: absolute;
-      bottom: calc(100% + 5px);
-      left: 50%;
-      transform: translateX(-50%) translateY(4px);
-      background: var(--ink);
-      color: var(--bg);
-      font-size: 0.67rem;
-      font-weight: 600;
-      padding: 2px 6px;
-      border-radius: 5px;
-      white-space: nowrap;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 140ms, transform 140ms;
-    }}
-    .bar {{
-      width: 100%;
-      min-height: 4px;
-      border-radius: 4px 4px 2px 2px;
-      transition: opacity 140ms;
-    }}
-    .bar-wrap:hover .bar {{ opacity: 0.75; }}
-    .bar-label {{
-      writing-mode: vertical-rl;
-      transform: rotate(180deg);
-      font-size: 0.62rem;
-      color: var(--ink-3);
-      line-height: 1;
+    .heat-hd {{
+      display: grid;
+      grid-template-columns: 26px repeat(12, 1fr);
+      gap: 3px;
       flex-shrink: 0;
+      padding-bottom: 2px;
     }}
-
-    /* Heatmap */
-    .heatmap {{ display: grid; gap: 6px; }}
     .heat-row {{
+      flex: 1;
       display: grid;
-      grid-template-columns: 48px repeat(12, 1fr);
-      gap: 4px;
+      grid-template-columns: 26px repeat(12, 1fr);
+      gap: 3px;
+      align-items: stretch;
+    }}
+    .heat-year {{
+      font-size: 0.55rem;
+      font-weight: 600;
+      color: var(--ink-3);
+      display: flex;
       align-items: center;
     }}
-    .heat-year {{ font-size: 0.68rem; font-weight: 600; color: var(--ink-3); }}
-    .month-head {{ font-size: 0.62rem; color: var(--ink-3); text-align: center; }}
+    .month-head {{ font-size: 0.48rem; color: var(--ink-3); text-align: center; }}
     .heat-cell {{
-      aspect-ratio: 1;
-      border-radius: 4px;
+      border-radius: 3px;
       border: none;
-      display: grid;
-      place-items: center;
-      font: inherit;
-      font-size: 0.6rem;
-      font-weight: 600;
-      color: rgba(255,255,255,0.65);
       cursor: pointer;
       transition: transform 110ms, box-shadow 110ms;
+      min-height: 0;
     }}
     .heat-cell:hover {{
-      transform: scale(1.18);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      transform: scale(1.12);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.22);
       z-index: 1;
     }}
     .heat-cell.active {{
       outline: 2px solid var(--accent-2);
-      outline-offset: 2px;
+      outline-offset: 1px;
     }}
 
-    /* Tag cloud */
+    /* Tag cloud — sidebar */
     .tag-cloud {{
       display: flex;
       flex-wrap: wrap;
-      gap: 6px 9px;
-      padding-top: 14px;
-      margin-top: 14px;
-      border-top: 1px solid var(--border);
+      gap: 4px 6px;
+      margin-top: 8px;
       align-items: baseline;
     }}
     .tag {{
@@ -960,11 +1048,10 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       .shell {{ grid-template-columns: 1fr; }}
       .sidebar {{ position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }}
       .sidebar-body {{ max-height: 55vh; }}
-      .hero {{ grid-template-columns: repeat(2, 1fr); }}
-      .chart-grid {{ grid-template-columns: 1fr; }}
+      .top-zone {{ grid-template-columns: 1fr; }}
     }}
     @media (max-width: 600px) {{
-      .hero {{ grid-template-columns: 1fr 1fr; }}
+      .top-zone {{ grid-template-columns: 1fr; }}
       .main {{ padding: 14px; }}
     }}
 
@@ -1013,8 +1100,14 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           <input id="search" class="search" type="search" placeholder="Search bookmarks&hellip;">
         </div>
 
-        <p class="nav-label">Categories</p>
+        <div class="nav-section-hd">
+          <p class="nav-label">Categories</p>
+          <button id="sidebar-clear" class="sidebar-clear-btn" type="button" hidden>&#x2715; clear</button>
+        </div>
         <div id="category-list" class="category-list"></div>
+
+        <p class="nav-label" style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border)">Top Tags</p>
+        <div id="tag-cloud" class="tag-cloud"></div>
       </div>
 
       <div class="sidebar-footer">
@@ -1030,55 +1123,66 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
 
     <!-- Main -->
     <main class="main">
-      <!-- Stats -->
-      <section class="hero">
-        <div class="stat">
-          <div class="label">Total Bookmarks</div>
-          <div id="stat-total" class="value"></div>
+      <!-- Top zone: left 50% = 3 metric cards, right 50% = heatmap -->
+      <div class="top-zone">
+        <div class="metrics-stack">
+          <!-- Month metric -->
+          <div class="mcard">
+            <div class="mcard-lbl">Bookmarks / Month</div>
+            <div class="mcard-primary">
+              <span id="stat-month-count" class="mcard-num"></span>
+              <span id="month-trend" class="trend-badge"></span>
+              <span id="stat-month-label" class="mcard-sub"></span>
+            </div>
+            <div id="month-spark" class="mcard-spark"></div>
+          </div>
+          <!-- Year metric -->
+          <div class="mcard">
+            <div class="mcard-lbl">Bookmarks / Year</div>
+            <div class="mcard-primary">
+              <span id="stat-year-count" class="mcard-num"></span>
+              <span id="year-span-lbl" class="mcard-meta"></span>
+              <span id="stat-year-label" class="mcard-sub"></span>
+            </div>
+            <div id="year-spark" class="mcard-spark"></div>
+          </div>
+          <!-- Categories + treemap -->
+          <div class="mcard">
+            <div class="mcard-lbl">Categories <span id="stat-categories" class="mcard-meta" style="margin-left:3px"></span></div>
+            <div class="mcard-cats">
+              <div class="cats-nums">
+                <div class="mcard-primary">
+                  <span id="stat-total" class="mcard-num"></span>
+                </div>
+                <div class="mcard-sub">total bookmarks</div>
+              </div>
+              <div id="categories-treemap" class="cats-treemap"></div>
+            </div>
+          </div>
         </div>
-        <div class="stat">
-          <div class="label">Date Range</div>
-          <div id="stat-range" class="value" style="font-size:0.95rem;letter-spacing:-0.02em;padding-top:6px;line-height:1.3"></div>
-        </div>
-        <div class="stat">
-          <div class="label">Top Category</div>
-          <div id="stat-category" class="value" style="font-size:1rem;letter-spacing:-0.025em;padding-top:5px;line-height:1.2"></div>
-        </div>
-        <div class="stat">
-          <div class="label">Categories</div>
-          <div id="stat-categories" class="value"></div>
-        </div>
-      </section>
-
-      <!-- Analysis -->
-      <section class="analysis-section">
-        <div class="panel">
-          <div class="panel-hd"><h2>AI Analysis</h2></div>
-          <div id="analysis" class="analysis collapsed">{analysis_html}</div>
-          <button id="analysis-toggle" class="btn analysis-toggle" type="button">Show Full Analysis</button>
-        </div>
-      </section>
-
-      <!-- Charts -->
-      <section class="chart-grid">
-        <div class="panel">
+        <!-- Right: Activity Heatmap -->
+        <div class="top-heatmap">
           <div class="panel-hd"><h2>Activity Heatmap</h2></div>
           <div id="heatmap" class="heatmap"></div>
-          <div id="tag-cloud" class="tag-cloud"></div>
         </div>
-        <div class="mini-chart-stack">
-          <div class="panel">
-            <div class="panel-hd"><h2>By Month</h2></div>
-            <div id="month-bars" class="bars"></div>
+      </div>
+
+      <!-- Analysis thin strip -->
+      <section class="analysis-strip">
+        <div class="panel">
+          <div class="analysis-strip-hd">
+            <span class="strip-icon">+</span>
+            <span class="strip-badge">AI Analysis</span>
+            <p id="analysis-teaser" class="analysis-teaser"></p>
+            <button id="analysis-toggle" class="analysis-show-btn" type="button">Show full analysis &#x2192;</button>
           </div>
-          <div class="panel">
-            <div class="panel-hd"><h2>By Year</h2></div>
-            <div id="year-bars" class="bars"></div>
+          <div id="analysis-expanded" class="analysis-expanded" hidden>
+            <div id="analysis" class="analysis">{analysis_html}</div>
           </div>
         </div>
       </section>
 
-      <!-- Cards -->
+      <!-- Cards — front and center -->
       <section class="panel">
         <div class="bm-toolbar">
           <div>
@@ -1092,6 +1196,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           <button id="load-more" class="btn" type="button" hidden>Load More</button>
         </div>
       </section>
+
     </main>
   </div>
 
@@ -1125,13 +1230,11 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     const themeLabel = document.getElementById("theme-label");
     const themeIcon = document.getElementById("theme-icon");
     const analysis = document.getElementById("analysis");
+    const analysisExpanded = document.getElementById("analysis-expanded");
     const analysisToggle = document.getElementById("analysis-toggle");
     const tagCloud = document.getElementById("tag-cloud");
 
     document.getElementById("stat-total").textContent = data.total;
-    document.getElementById("stat-range").textContent = `${{data.date_range.first}} → ${{data.date_range.last}}`;
-    document.getElementById("stat-category").textContent = data.top_category || "—";
-    document.getElementById("stat-categories").textContent = data.categories.length;
 
     const moonPath = "M8 3a5 5 0 1 0 4.03 7.97A5.5 5.5 0 0 1 5 7.5 5.5 5.5 0 0 1 8 3z";
     const sunPath = "M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-10a1 1 0 0 0 1-1V1a1 1 0 1 0-2 0v.5A1 1 0 0 0 8 2zm0 12a1 1 0 0 0-1 1v.5a1 1 0 1 0 2 0V15a1 1 0 0 0-1-1zm7-7h-.5a1 1 0 1 0 0 2H15a1 1 0 1 0 0-2zM2 8a1 1 0 0 0-1-1H.5a1 1 0 1 0 0 2H1a1 1 0 0 0 1-1zm10.95-3.536.354-.354a1 1 0 0 0-1.414-1.414l-.354.354a1 1 0 0 0 1.414 1.414zm-9.9 7.072-.354.354a1 1 0 0 0 1.414 1.414l.354-.354a1 1 0 0 0-1.414-1.414zm9.9.354.354.354a1 1 0 0 0 1.414-1.414l-.354-.354a1 1 0 0 0-1.414 1.414zm-9.9-7.072-.354-.354a1 1 0 0 0-1.414 1.414l.354.354a1 1 0 0 0 1.414-1.414z";
@@ -1153,14 +1256,14 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     }});
 
     analysisToggle.addEventListener("click", () => {{
-      analysis.classList.toggle("collapsed");
-      analysisToggle.textContent = analysis.classList.contains("collapsed")
-        ? "Show Full Analysis" : "Show Less";
+      const expanded = analysisExpanded.hidden;
+      analysisExpanded.hidden = !expanded;
+      analysisToggle.textContent = expanded ? "Collapse" : "Show Analysis";
     }});
 
     function collapseAnalysis() {{
-      analysis.classList.add("collapsed");
-      analysisToggle.textContent = "Show Full Analysis";
+      if (analysisExpanded) analysisExpanded.hidden = true;
+      if (analysisToggle) analysisToggle.textContent = "Show Analysis";
     }}
 
     function colorForCount(count, max) {{
@@ -1182,38 +1285,125 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       if (!filteredCategories().some(c => c.name === state.category)) state.category = "All";
     }}
 
-    function renderBars() {{
-      const monthBars = document.getElementById("month-bars");
-      const yearBars = document.getElementById("year-bars");
-
-      const maxMonth = Math.max(...data.month_series.map(d => d.count), 1);
-      monthBars.innerHTML = data.month_series.map(d => `
-        <div class="bar-wrap">
-          <div class="bar-tip">${{d.month}}: ${{d.count}}</div>
-          <div class="bar" style="height:${{Math.max(5,(d.count/maxMonth)*108)}}px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 55%,var(--accent-2)))"></div>
-          <div class="bar-label">${{d.month.slice(2)}}</div>
-        </div>
-      `).join("");
-
-      const maxYear = Math.max(...data.year_counts.map(d => d.count), 1);
-      yearBars.innerHTML = data.year_counts.map(d => `
-        <div class="bar-wrap">
-          <div class="bar-tip">${{d.year}}: ${{d.count}}</div>
-          <div class="bar" style="height:${{Math.max(5,(d.count/maxYear)*108)}}px;background:linear-gradient(180deg,var(--accent-2),color-mix(in srgb,var(--accent-2) 55%,var(--accent)))"></div>
-          <div class="bar-label">${{d.year}}</div>
-        </div>
-      `).join("");
+    /* SVG sparkline line/area chart */
+    function makeLineSparkline(values, color, filled) {{
+      if (!values || !values.length) return "";
+      const w = 300, h = 56;
+      const max = Math.max(...values, 1);
+      const n = values.length;
+      const pts = values.map((v, i) => [
+        n === 1 ? w / 2 : (i / (n - 1)) * w,
+        h - Math.max(3, (v / max) * (h - 6))
+      ]);
+      const pathD = pts.map((p, i) => `${{i ? "L" : "M"}}${{p[0].toFixed(1)}} ${{p[1].toFixed(1)}}`).join(" ");
+      const areaD = `${{pathD}} L${{w}} ${{h}} L0 ${{h}} Z`;
+      const dot = pts[pts.length - 1];
+      return `<svg viewBox="0 0 ${{w}} ${{h}}" preserveAspectRatio="none" style="overflow:visible">
+        ${{filled ? `<defs><linearGradient id="sg${{color.replace(/[^a-z0-9]/gi,"")}}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${{color}}" stop-opacity="0.18"/><stop offset="100%" stop-color="${{color}}" stop-opacity="0"/></linearGradient></defs><path d="${{areaD}}" fill="url(#sg${{color.replace(/[^a-z0-9]/gi,"")}})" />` : ""}}
+        <path d="${{pathD}}" fill="none" stroke="${{color}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="${{dot[0].toFixed(1)}}" cy="${{dot[1].toFixed(1)}}" r="3" fill="${{color}}"/>
+      </svg>`;
     }}
+
+    /* SVG treemap for categories */
+    function makeTreemap(cats, vw, vh) {{
+      if (!cats || !cats.length) return "";
+      const top = cats.slice(0, 11);
+      const total = top.reduce((s, c) => s + (c.count || 0), 0);
+      if (!total) return "";
+      function tmSlice(items, x, y, w, h) {{
+        if (!items.length) return [];
+        if (items.length === 1) return [{{ ...items[0], x, y, w, h }}];
+        const itemTot = items.reduce((s, c) => s + (c.count || 0), 0);
+        let acc = 0, split = 1;
+        for (let i = 0; i < items.length - 1; i++) {{
+          acc += items[i].count || 0;
+          split = i + 1;
+          if (acc / itemTot >= 0.5) break;
+        }}
+        const r = items.slice(0, split).reduce((s, c) => s + (c.count || 0), 0) / itemTot;
+        if (w >= h) {{
+          return [
+            ...tmSlice(items.slice(0, split), x, y, w * r, h),
+            ...tmSlice(items.slice(split), x + w * r, y, w * (1 - r), h),
+          ];
+        }} else {{
+          return [
+            ...tmSlice(items.slice(0, split), x, y, w, h * r),
+            ...tmSlice(items.slice(split), x, y + h * r, w, h * (1 - r)),
+          ];
+        }}
+      }}
+      const rects = tmSlice(top, 0, 0, vw, vh);
+      const GAP = 2;
+      const parts = [];
+      rects.forEach((rect, i) => {{
+        const gx = rect.x + GAP / 2, gy = rect.y + GAP / 2;
+        const gw = Math.max(0, rect.w - GAP), gh = Math.max(0, rect.h - GAP);
+        if (gw <= 0 || gh <= 0) return;
+        const fill = PALETTE[i % PALETTE.length];
+        parts.push(`<rect x="${{gx.toFixed(1)}}" y="${{gy.toFixed(1)}}" width="${{gw.toFixed(1)}}" height="${{gh.toFixed(1)}}" fill="${{fill}}" rx="3"><title>${{rect.name}}: ${{rect.count}}</title></rect>`);
+        const fs = Math.min(gw / 4.5, gh / 2, 9);
+        if (fs >= 5.5) {{
+          const tx = (gx + gw / 2).toFixed(1), ty = (gy + gh / 2).toFixed(1);
+          const nm = rect.name.split(/[\\s&(]/)[0];
+          parts.push(`<text x="${{tx}}" y="${{ty}}" text-anchor="middle" dominant-baseline="middle" font-family="inherit" font-size="${{fs.toFixed(1)}}" fill="rgba(255,255,255,0.92)" font-weight="700">${{nm}}</text>`);
+        }}
+      }});
+      return `<svg viewBox="0 0 ${{vw}} ${{vh}}" preserveAspectRatio="none" style="display:block;width:100%;height:100%">${{parts.join("")}}</svg>`;
+    }}
+
+    function renderHeroCards() {{
+      const months = data.month_series;
+      const lastM = months[months.length - 1] || {{}};
+      const prevM = months[months.length - 2] || {{}};
+      const mCount = lastM.count || 0;
+      const pCount = prevM.count || 0;
+
+      document.getElementById("stat-month-count").textContent = mCount;
+      document.getElementById("stat-month-label").textContent = lastM.month || "";
+      document.getElementById("month-spark").innerHTML = makeLineSparkline(months.map(d => d.count), "var(--accent)", true);
+
+      const trendEl = document.getElementById("month-trend");
+      if (pCount > 0) {{
+        const pct = Math.round((mCount - pCount) / pCount * 100);
+        trendEl.textContent = `${{pct >= 0 ? "+" : ""}}${{pct}}%`;
+        trendEl.className = `trend-badge ${{pct >= 0 ? "trend-up" : "trend-down"}}`;
+      }}
+
+      const years = data.year_counts;
+      const curYear = String(new Date().getFullYear());
+      const curYearData = years.find(y => y.year === curYear) || years[years.length - 1] || {{}};
+      document.getElementById("stat-year-count").textContent = curYearData.count || 0;
+      document.getElementById("stat-year-label").textContent = curYearData.year || "";
+      document.getElementById("year-span-lbl").textContent = `${{years.length}} yr${{years.length !== 1 ? "s" : ""}}`;
+      document.getElementById("year-spark").innerHTML = makeLineSparkline(years.map(d => d.count), "var(--accent-2)", true);
+
+      document.getElementById("stat-total").textContent = data.total;
+      document.getElementById("stat-categories").textContent = data.categories.length;
+
+      /* Treemap — rendered after layout so dimensions are available */
+      requestAnimationFrame(() => {{
+        const tmEl = document.getElementById("categories-treemap");
+        if (tmEl) {{
+          const vw = Math.max(tmEl.clientWidth || 160, 80);
+          const vh = Math.max(tmEl.clientHeight || 48, 36);
+          tmEl.innerHTML = makeTreemap(data.categories, vw, vh);
+        }}
+      }});
+    }}
+
+    function renderBars() {{}} /* bars replaced by stat card sparklines */
 
     function renderHeatmap() {{
       const heatmap = document.getElementById("heatmap");
-      const monthLabels = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const monthLabels = ["","J","F","M","A","M","J","J","A","S","O","N","D"];
       const max = Math.max(...data.month_series.map(d => d.count), 1);
-      const header = `<div class="heat-row">${{monthLabels.map(l => `<div class="month-head">${{l}}</div>`).join("")}}</div>`;
+      const header = `<div class="heat-hd">${{monthLabels.map(l => `<div class="month-head">${{l}}</div>`).join("")}}</div>`;
       const rows = data.heatmap.map(row => `
         <div class="heat-row">
           <div class="heat-year">${{row.year}}</div>
-          ${{row.months.map(cell => `<button class="heat-cell ${{state.month === cell.key ? "active" : ""}}" type="button" data-month="${{cell.key}}" title="${{cell.key}}: ${{cell.count}}" style="background:${{colorForCount(cell.count,max)}}">${{cell.count || ""}}</button>`).join("")}}
+          ${{row.months.map(cell => `<button class="heat-cell ${{state.month === cell.key ? "active" : ""}}" type="button" data-month="${{cell.key}}" title="${{cell.key}}: ${{cell.count}}" style="background:${{colorForCount(cell.count,max)}}"></button>`).join("")}}
         </div>
       `).join("");
       heatmap.innerHTML = header + rows;
@@ -1230,8 +1420,9 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     }}
 
     function renderTagCloud() {{
-      tagCloud.innerHTML = data.tag_cloud.map(tag => `
-        <button class="tag ${{state.tag === tag.term ? "active" : ""}}" type="button" data-tag="${{tag.term}}" style="font-size:${{tag.weight}}rem" title="${{tag.count}} mentions">${{tag.term}}</button>
+      const topTags = data.tag_cloud.slice(0, 18);
+      tagCloud.innerHTML = topTags.map(tag => `
+        <button class="tag ${{state.tag === tag.term ? "active" : ""}}" type="button" data-tag="${{tag.term}}" style="font-size:${{Math.min(tag.weight, 0.88)}}rem" title="${{tag.count}} mentions">${{tag.term}} <span class="tag-count">${{tag.count}}</span></button>
       `).join("");
       tagCloud.querySelectorAll(".tag").forEach(tag => {{
         tag.addEventListener("click", () => {{
@@ -1294,6 +1485,8 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           scrollToCards();
         }});
       }});
+      const sidebarClear = document.getElementById("sidebar-clear");
+      if (sidebarClear) sidebarClear.hidden = state.category === "All";
     }}
 
     function currentBookmarks() {{
@@ -1395,6 +1588,15 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       renderHeatmap(); renderTagCloud(); renderCategories(); renderCards();
     }});
 
+    const sidebarClearBtn = document.getElementById("sidebar-clear");
+    if (sidebarClearBtn) {{
+      sidebarClearBtn.addEventListener("click", () => {{
+        state.category = "All";
+        state.visible = PAGE_SIZE;
+        renderCategories(); renderCards();
+      }});
+    }}
+
     loadMore.addEventListener("click", () => {{
       collapseAnalysis();
       state.visible += PAGE_SIZE;
@@ -1404,13 +1606,20 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     function reformatAnalysis() {{
       const el = document.getElementById("analysis");
       if (!el || !el.children.length) return;
+      /* Populate teaser from first paragraph */
+      const firstP = el.querySelector("p, li");
+      const teaser = document.getElementById("analysis-teaser");
+      if (firstP && teaser) {{
+        const txt = firstP.textContent.trim();
+        teaser.textContent = txt.length > 180 ? txt.slice(0, 180) + "..." : txt;
+      }}
       /* Promote first paragraph to pull-quote */
-      const firstP = el.querySelector("p");
-      if (firstP) {{
+      const firstBlock = el.querySelector("p");
+      if (firstBlock) {{
         const quote = document.createElement("blockquote");
         quote.className = "pull-quote";
-        quote.innerHTML = firstP.innerHTML;
-        firstP.replaceWith(quote);
+        quote.innerHTML = firstBlock.innerHTML;
+        firstBlock.replaceWith(quote);
       }}
       /* Wrap remaining content in two-column layout */
       const rest = Array.from(el.children).filter(c => c.tagName !== "BLOCKQUOTE");
@@ -1422,6 +1631,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       }}
     }}
 
+    renderHeroCards();
     renderBars();
     renderHeatmap();
     renderTagCloud();
