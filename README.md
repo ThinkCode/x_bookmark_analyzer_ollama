@@ -141,12 +141,35 @@ What Happens On Each Run
 
 - If `bookmarks_cache.json` already exists, the script loads it first
 - It then attempts to scrape only bookmarks whose IDs are not already in the cache
+- It scrolls the X bookmark folder list until it stops discovering new folders, instead of trusting only the initially rendered folders
+- It opens every discovered folder by scrolling back to that folder before collecting posts
 - Missing fields are backfilled automatically, including `created_at`
 - Existing summaries and categories are reused
 - If Chrome/CDP is unavailable but cache already exists, the script can continue from cached data
 - If no new bookmarks are found, the previous interest analysis is reused instead of re-running Ollama analysis
 
 If the script cannot connect to Chrome over CDP, it means Chrome was not started with `--remote-debugging-port=9222` or the debugging instance is no longer running.
+
+Folder Coverage
+
+X virtualizes the bookmark folder list, so only the currently visible rows exist in the browser DOM at first. Earlier versions could appear capped around a few dozen folders because they read only that visible slice.
+
+The scraper now:
+
+- Scrolls the folder list until several consecutive scrolls reveal no new folder names
+- Tracks folder names across the full virtualized list
+- Scrolls back through the list to open each folder before scraping its timeline
+- Defaults to scanning every discovered folder on each run for correctness
+
+The tuning knobs live in `x_bookmark_analyzer/config.py`:
+
+```python
+FOLDER_SCAN_STABLE_SCROLLS = 8
+STOP_ON_FIRST_STALE_FOLDER = False
+SCRAPE_TEST_LIMIT = None
+```
+
+Keep `STOP_ON_FIRST_STALE_FOLDER = False` when you want maximum confidence that all folders were checked. Set it to `True` only if you are comfortable trading completeness for faster incremental scans.
 
 Categorization Workflow
 

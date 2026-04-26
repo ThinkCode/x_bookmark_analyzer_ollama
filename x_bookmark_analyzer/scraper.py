@@ -3,20 +3,47 @@ import re
 import sys
 import time
 
-from .config import CDP_URL, SCRAPE_TEST_LIMIT
+from .config import CDP_URL, FOLDER_SCAN_STABLE_SCROLLS, SCRAPE_TEST_LIMIT
 from .models import clean_text, folder_category_from_name, normalize_label, timestamp_iso
 
 # --- Scraping ---
 
-def extract_folder_names(page) -> list[str]:
-    blacklist = {
-        "all bookmarks",
-        "search bookmarks",
-        "bookmarks",
-        "back",
-        "new folder",
-        "bookmark",
-    }
+FOLDER_BLACKLIST = {
+    "all bookmarks",
+    "back",
+    "bookmarks",
+    "communities",
+    "explore",
+    "grok",
+    "home",
+    "jobs",
+    "lists",
+    "messages",
+    "more",
+    "new folder",
+    "notifications",
+    "post",
+    "premium",
+    "profile",
+    "search",
+    "search bookmarks",
+    "verified orgs",
+    "bookmark",
+}
+
+
+def is_folder_name(value: str) -> bool:
+    normalized = normalize_label(value)
+    return bool(
+        normalized
+        and normalized not in FOLDER_BLACKLIST
+        and len(value) <= 60
+        and not value.startswith("@")
+        and not value.isdigit()
+    )
+
+
+def extract_visible_folder_names(page) -> list[str]:
     names = []
     seen = set()
     selectors = [
@@ -34,19 +61,107 @@ def extract_folder_names(page) -> list[str]:
             if not text:
                 continue
             text = text.split("\n")[0].strip()
-            normalized = normalize_label(text)
-            if (
-                not normalized
-                or normalized in blacklist
-                or len(text) > 60
-                or text.startswith("@")
-                or text.isdigit()
-            ):
-                continue
-            if text not in seen:
+            if is_folder_name(text) and text not in seen:
                 seen.add(text)
                 names.append(text)
     return names
+
+
+def extract_folder_names(page) -> list[str]:
+    """Scroll the virtualized X folder list until no new folder names appear."""
+    names = []
+    seen = set()
+    stable_scrolls = 0
+    last_scroll_y = -1
+    last_height = -1
+
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(800)
+
+    while stable_scrolls < FOLDER_SCAN_STABLE_SCROLLS:
+        new_names = 0
+        for name in extract_visible_folder_names(page):
+            if name not in seen:
+                seen.add(name)
+                names.append(name)
+                new_names += 1
+
+        metrics = page.evaluate(
+            """() => ({
+                y: Math.round(window.scrollY),
+                height: Math.round(document.body.scrollHeight),
+                innerHeight: Math.round(window.innerHeight)
+            })"""
+        )
+        page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
+        page.wait_for_timeout(1200)
+        next_metrics = page.evaluate(
+            """() => ({
+                y: Math.round(window.scrollY),
+                height: Math.round(document.body.scrollHeight)
+            })"""
+        )
+
+        moved = next_metrics["y"] != metrics["y"]
+        height_changed = next_metrics["height"] != metrics["height"]
+        if new_names or moved or height_changed or metrics["y"] != last_scroll_y or metrics["height"] != last_height:
+            stable_scrolls = 0 if new_names else stable_scrolls + 1
+        else:
+            stable_scrolls += 1
+
+        last_scroll_y = next_metrics["y"]
+        last_height = next_metrics["height"]
+        print(f"  {len(names)} bookmark folders discovered...", end="\r")
+
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(800)
+    print(f"  {len(names)} bookmark folders discovered.")
+    return names
+
+
+def find_folder_button(page, folder_name: str):
+    try:
+        candidate = page.get_by_text(folder_name, exact=True).first
+        candidate.wait_for(timeout=750)
+        return candidate
+    except Exception:
+        return None
+
+
+def scroll_to_folder(page, folder_name: str) -> bool:
+    page.evaluate("window.scrollTo(0, 0)")
+    page.wait_for_timeout(500)
+    stable_scrolls = 0
+    last_scroll_y = -1
+    last_height = -1
+
+    while stable_scrolls < FOLDER_SCAN_STABLE_SCROLLS:
+        if find_folder_button(page, folder_name):
+            return True
+
+        metrics = page.evaluate(
+            """() => ({
+                y: Math.round(window.scrollY),
+                height: Math.round(document.body.scrollHeight)
+            })"""
+        )
+        page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
+        page.wait_for_timeout(800)
+        next_metrics = page.evaluate(
+            """() => ({
+                y: Math.round(window.scrollY),
+                height: Math.round(document.body.scrollHeight)
+            })"""
+        )
+
+        if next_metrics["y"] == last_scroll_y and next_metrics["height"] == last_height:
+            stable_scrolls += 1
+        else:
+            stable_scrolls = 0 if next_metrics["y"] != metrics["y"] else stable_scrolls + 1
+        last_scroll_y = next_metrics["y"]
+        last_height = next_metrics["height"]
+
+    return bool(find_folder_button(page, folder_name))
 
 
 def extract_bookmark_from_element(el, folder_name: str) -> dict | None:
@@ -146,6 +261,8 @@ def collect_bookmarks_from_timeline(
 
 def open_folder(page, folder_name: str) -> bool:
     try:
+        if not scroll_to_folder(page, folder_name):
+            return False
         page.get_by_text(folder_name, exact=True).first.click(timeout=5000)
         page.wait_for_timeout(1500)
         return True

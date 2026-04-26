@@ -1,6 +1,6 @@
 """Command-line orchestration for the bookmark analyzer."""
 
-from .config import FORCE_REBUILD_CATEGORIES, HTML_OUTPUT, OUTPUT
+from .config import FORCE_REBUILD_CATEGORIES, HTML_OUTPUT, OUTPUT, STOP_ON_FIRST_STALE_FOLDER
 from .dashboard import read_existing_analysis, render_html, write_markdown
 from .enrichment import enrich
 from .llm import analyze, categorize_all, read_obsidian, summarize_all
@@ -30,14 +30,13 @@ def main() -> None:
 
     if existing:
         missing_folder_metadata = sum(1 for bookmark in existing if not bookmark.get("folder_name"))
-        stop_on_first_stale_folder = missing_folder_metadata == 0
         if missing_folder_metadata:
-            print(f"Backfilling folder metadata for {missing_folder_metadata} cached bookmarks before using early-stop scanning.")
+            print(f"Backfilling folder metadata for {missing_folder_metadata} cached bookmarks.")
         print("Attempting to fetch only new bookmarks since the last run...")
         new_bookmarks = scrape_bookmarks(
             {b["id"] for b in existing},
             allow_failure=True,
-            stop_on_first_stale_folder=stop_on_first_stale_folder,
+            stop_on_first_stale_folder=STOP_ON_FIRST_STALE_FOLDER and missing_folder_metadata == 0,
             existing_bookmarks=existing,
         )
     else:
