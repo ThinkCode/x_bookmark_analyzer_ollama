@@ -208,484 +208,888 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>X Bookmark Dashboard</title>
+  <title>X Bookmark Atlas</title>
   <style>
+    /* === Tokens === */
     :root {{
-      --bg: #f5efe2;
-      --panel: rgba(255, 251, 245, 0.84);
-      --panel-strong: #fffaf1;
-      --ink: #1f241d;
-      --muted: #646a61;
-      --accent: #c85f38;
-      --accent-2: #2f7d6b;
-      --border: rgba(31, 36, 29, 0.09);
-      --shadow: 0 18px 50px rgba(74, 52, 32, 0.12);
-      --control: #ffffff;
-      --heat-empty: rgba(47, 125, 107, 0.08);
-      --category-text: #1f241d;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      font-family: "Avenir Next", "Segoe UI", sans-serif;
-      color: var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(200, 95, 56, 0.18), transparent 26rem),
-        radial-gradient(circle at top right, rgba(47, 125, 107, 0.18), transparent 30rem),
-        linear-gradient(180deg, #f9f1e4 0%, #f1ebdf 100%);
+      --bg: #f4f6ff;
+      --surface: #ffffff;
+      --surface-2: rgba(255,255,255,0.75);
+      --ink: #0d1117;
+      --ink-2: #566070;
+      --ink-3: #99a3b3;
+      --accent: #5b5ef6;
+      --accent-glow: rgba(91,94,246,0.18);
+      --accent-2: #0ea571;
+      --accent-2-glow: rgba(14,165,113,0.16);
+      --warn: #f59e0b;
+      --border: rgba(13,17,23,0.07);
+      --border-strong: rgba(13,17,23,0.13);
+      --shadow-xs: 0 1px 3px rgba(0,0,0,0.04),0 1px 2px rgba(0,0,0,0.03);
+      --shadow-sm: 0 2px 8px rgba(91,94,246,0.07),0 1px 3px rgba(0,0,0,0.04);
+      --shadow: 0 4px 20px rgba(91,94,246,0.1),0 1px 4px rgba(0,0,0,0.05);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --pill: 999px;
+      --sidebar-w: 256px;
+      --heat-empty: rgba(91,94,246,0.06);
     }}
     body.dark {{
-      --bg: #0f1419;
-      --panel: rgba(22, 30, 37, 0.92);
-      --panel-strong: #18212a;
-      --ink: #f0f5f4;
-      --muted: #a8b8b2;
-      --accent: #7cc7ad;
-      --accent-2: #f0a35e;
-      --border: rgba(240, 245, 244, 0.14);
-      --shadow: 0 20px 55px rgba(0, 0, 0, 0.35);
-      --control: #111a21;
-      --heat-empty: rgba(124, 199, 173, 0.08);
-      --category-text: #f0f5f4;
+      --bg: #060912;
+      --surface: rgba(12,17,32,0.98);
+      --surface-2: rgba(18,26,46,0.8);
+      --ink: #dde4f0;
+      --ink-2: #7a8ba6;
+      --ink-3: #3d4f66;
+      --accent: #818cf8;
+      --accent-glow: rgba(129,140,248,0.22);
+      --accent-2: #34d399;
+      --accent-2-glow: rgba(52,211,153,0.18);
+      --warn: #fbbf24;
+      --border: rgba(255,255,255,0.07);
+      --border-strong: rgba(255,255,255,0.13);
+      --shadow-xs: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-sm: 0 2px 10px rgba(0,0,0,0.35);
+      --shadow: 0 6px 28px rgba(0,0,0,0.5);
+      --heat-empty: rgba(129,140,248,0.07);
+    }}
+
+    /* === Reset & Base === */
+    *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--ink);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }}
+    body:not(.dark) {{
       background:
-        radial-gradient(circle at top left, rgba(124, 199, 173, 0.16), transparent 26rem),
-        radial-gradient(circle at top right, rgba(240, 163, 94, 0.12), transparent 30rem),
+        radial-gradient(ellipse 70% 45% at 8% 0%, rgba(91,94,246,0.09) 0%, transparent 55%),
+        radial-gradient(ellipse 55% 35% at 92% 5%, rgba(14,165,113,0.07) 0%, transparent 50%),
         var(--bg);
     }}
-    a {{ color: inherit; }}
+    body.dark {{
+      background:
+        radial-gradient(ellipse 65% 40% at 5% 0%, rgba(129,140,248,0.13) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 30% at 95% 5%, rgba(52,211,153,0.08) 0%, transparent 50%),
+        var(--bg);
+    }}
+    a {{ color: var(--accent); text-decoration: none; }}
+    a:hover {{ text-decoration: underline; text-underline-offset: 3px; }}
+
+    /* === Layout === */
     .shell {{
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: var(--sidebar-w) 1fr;
       min-height: 100vh;
     }}
+
+    /* === Sidebar === */
     .sidebar {{
       position: sticky;
       top: 0;
       height: 100vh;
-      padding: 28px 22px;
-      background: color-mix(in srgb, var(--panel-strong) 88%, transparent);
-      backdrop-filter: blur(16px);
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
       border-right: 1px solid var(--border);
+      overflow: hidden;
+    }}
+    .sidebar-body {{
+      flex: 1;
       overflow-y: auto;
+      padding: 20px 14px 12px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
     }}
-    .brand {{
-      margin-bottom: 24px;
-    }}
-    .brand-row {{
+    .sidebar-footer {{
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 8px;
     }}
-    .brand h1 {{
-      margin: 0;
-      font-size: 1.7rem;
+    .footer-wordmark {{
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--ink-3);
+      letter-spacing: 0.04em;
+    }}
+
+    /* Brand */
+    .brand {{ margin-bottom: 18px; }}
+    .brand-logo {{
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 6px;
+    }}
+    .brand-gem {{
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px var(--accent-glow);
+    }}
+    .brand-title {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
       line-height: 1;
-      letter-spacing: -0.04em;
+      color: var(--ink);
     }}
-    .brand p {{
-      margin: 10px 0 0;
-      color: var(--muted);
-      font-size: 0.95rem;
+    .brand-desc {{
+      font-size: 0.78rem;
+      color: var(--ink-3);
+      line-height: 1.45;
+    }}
+
+    /* Search */
+    .search-wrap {{ position: relative; margin-bottom: 18px; }}
+    .search-icon {{
+      position: absolute;
+      left: 10px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-3);
+      pointer-events: none;
+      display: flex;
     }}
     .search {{
       width: 100%;
+      background: color-mix(in srgb, var(--ink) 4%, transparent);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 13px 14px;
-      background: var(--control);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px 8px 32px;
       color: var(--ink);
-      margin: 0 0 18px;
       font: inherit;
+      font-size: 0.83rem;
+      outline: none;
+      transition: border-color 150ms, box-shadow 150ms;
     }}
-    .theme-toggle {{
-      width: 30px;
-      height: 30px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      padding: 0;
-      margin: 0;
-      background: linear-gradient(135deg, #fff5c7 0 48%, #18212a 50% 100%);
-      color: var(--ink);
-      cursor: pointer;
-      font: inherit;
-      flex: 0 0 auto;
-      box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--panel-strong) 75%, transparent);
+    .search:focus {{
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
     }}
-    body.dark .theme-toggle {{
-      background: linear-gradient(135deg, #7cc7ad 0 48%, #0b1015 50% 100%);
+    .search::placeholder {{ color: var(--ink-3); }}
+
+    /* Nav */
+    .nav-label {{
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+      margin-bottom: 6px;
+      padding: 0 4px;
     }}
-    .category-list {{
-      display: grid;
-      gap: 10px;
-    }}
+    .category-list {{ display: flex; flex-direction: column; gap: 1px; }}
     .category-button {{
       display: flex;
       justify-content: space-between;
       align-items: center;
       width: 100%;
-      border: 1px solid var(--border);
-      background: var(--panel-strong);
-      border-radius: 8px;
-      padding: 12px 14px;
+      border: none;
+      background: transparent;
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
       cursor: pointer;
       font: inherit;
-      color: var(--category-text);
+      font-size: 0.83rem;
+      color: var(--ink-2);
       text-align: left;
-      box-shadow: 0 8px 20px rgba(31, 36, 29, 0.04);
+      transition: background 120ms, color 120ms;
+      gap: 8px;
+    }}
+    .category-button:hover {{
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
+      color: var(--ink);
     }}
     .category-button.active {{
-      border-color: rgba(200, 95, 56, 0.35);
-      background: linear-gradient(135deg, rgba(200, 95, 56, 0.14), rgba(47, 125, 107, 0.08));
+      background: color-mix(in srgb, var(--accent) 11%, transparent);
+      color: var(--accent);
+      font-weight: 600;
     }}
+    .cat-name {{
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }}
+    .cat-dot {{
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }}
+    .cat-label {{ white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
     .category-count {{
-      font-size: 0.85rem;
-      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--ink-3);
+      background: color-mix(in srgb, var(--ink) 6%, transparent);
+      border-radius: var(--pill);
+      padding: 1px 7px;
+      flex-shrink: 0;
     }}
-    .main {{
-      padding: 28px;
+    .category-button.active .category-count {{
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent);
     }}
+
+    /* Theme toggle */
+    .theme-toggle {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      border-radius: var(--pill);
+      padding: 4px 10px;
+      background: transparent;
+      color: var(--ink-2);
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 500;
+      transition: background 120ms, color 120ms, border-color 120ms;
+    }}
+    .theme-toggle:hover {{
+      background: color-mix(in srgb, var(--ink) 5%, transparent);
+      color: var(--ink);
+      border-color: var(--border-strong);
+    }}
+
+    /* === Main === */
+    .main {{ padding: 24px 24px 52px; }}
+
+    /* Hero */
     .hero {{
       display: grid;
-      gap: 18px;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin-bottom: 22px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
     }}
-    .stat, .panel {{
-      background: var(--panel);
+    .stat {{
+      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 18px;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      border-radius: var(--radius);
+      padding: 18px 18px 16px;
+      box-shadow: var(--shadow-xs);
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 160ms, border-color 160ms;
     }}
+    .stat:hover {{
+      box-shadow: var(--shadow-sm);
+      border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+    }}
+    .stat::after {{
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      opacity: 0;
+      transition: opacity 200ms;
+    }}
+    .stat:hover::after {{ opacity: 1; }}
     .stat .label {{
-      color: var(--muted);
-      font-size: 0.86rem;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      letter-spacing: 0;
+      color: var(--ink-3);
+      margin-bottom: 8px;
     }}
     .stat .value {{
-      margin-top: 10px;
       font-size: 2rem;
-      font-weight: 700;
-      letter-spacing: 0;
-    }}
-    .analysis-section {{
-      margin-bottom: 18px;
-    }}
-    .chart-grid {{
-      display: grid;
-      grid-template-columns: minmax(420px, 1.4fr) minmax(260px, 0.8fr);
-      gap: 18px;
-      margin-bottom: 18px;
-    }}
-    .mini-chart-stack {{
-      display: grid;
-      gap: 18px;
-    }}
-    .panel h2 {{
-      margin: 0 0 14px;
-      font-size: 1.1rem;
-      letter-spacing: 0;
-    }}
-    .analysis {{
-      color: #2f332d;
-      line-height: 1.6;
-      font-size: 0.98rem;
-    }}
-    body.dark .analysis {{ color: var(--ink); }}
-    .analysis h2, .analysis h3, .analysis h4 {{
-      margin: 1.2rem 0 0.45rem;
-      color: var(--ink);
-      line-height: 1.25;
-    }}
-    .analysis h2 {{ font-size: 1.18rem; }}
-    .analysis h3 {{ font-size: 1.08rem; }}
-    .analysis h4 {{ font-size: 1rem; }}
-    .analysis p {{
-      margin: 0 0 0.85rem;
-      max-width: 82ch;
-    }}
-    .analysis ol, .analysis ul {{
-      display: grid;
-      gap: 0.65rem;
-      margin: 0.25rem 0 1.1rem 1.35rem;
-      padding: 0;
-      max-width: 88ch;
-    }}
-    .analysis li {{
-      padding-left: 0.2rem;
-    }}
-    .analysis strong {{
-      color: var(--accent-2);
       font-weight: 800;
+      letter-spacing: -0.045em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
     }}
-    .analysis em {{
-      color: color-mix(in srgb, var(--ink) 80%, var(--accent));
-      font-style: italic;
+
+    /* Panels */
+    .panel {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow-xs);
     }}
-    .analysis hr {{
-      border: 0;
-      border-top: 1px solid var(--border);
-      margin: 1rem 0;
+    .panel-hd {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }}
+    .panel-hd h2 {{
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--ink-3);
+    }}
+
+    /* Analysis */
+    .analysis-section {{ margin-bottom: 16px; }}
+    .analysis {{
+      color: var(--ink);
+      line-height: 1.7;
+      font-size: 0.9rem;
     }}
     .analysis.collapsed {{
-      max-height: 14rem;
+      max-height: 11rem;
       overflow: hidden;
       position: relative;
     }}
     .analysis.collapsed::after {{
       content: "";
       position: absolute;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      height: 4.5rem;
-      background: linear-gradient(180deg, transparent, var(--panel));
+      left: 0; right: 0; bottom: 0;
+      height: 5rem;
+      background: linear-gradient(transparent, var(--surface));
       pointer-events: none;
     }}
-    .analysis-toggle, .load-more, .clear-filter {{
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--control);
+    .analysis h2 {{ font-size: 1rem; font-weight: 700; margin: 1.1rem 0 0.35rem; color: var(--ink); }}
+    .analysis h3 {{ font-size: 0.93rem; font-weight: 700; margin: 0.9rem 0 0.3rem; color: var(--ink); }}
+    .analysis h4 {{ font-size: 0.87rem; font-weight: 600; margin: 0.75rem 0 0.25rem; color: var(--ink-2); }}
+    .analysis p {{ margin: 0 0 0.7rem; max-width: 80ch; }}
+    .analysis ol, .analysis ul {{
+      margin: 0.2rem 0 0.9rem 1.15rem; padding: 0;
+      display: grid; gap: 0.45rem; max-width: 80ch;
+    }}
+    .analysis strong {{ color: var(--accent-2); font-weight: 700; }}
+    .analysis em {{ color: color-mix(in srgb, var(--ink) 70%, var(--accent)); font-style: italic; }}
+    .analysis hr {{ border: none; border-top: 1px solid var(--border); margin: 0.9rem 0; }}
+
+    /* Analysis — pull quote + two-column layout */
+    .pull-quote {{
+      font-size: 1.02rem;
+      font-weight: 500;
+      line-height: 1.72;
       color: var(--ink);
+      padding: 14px 18px 14px 24px;
+      margin: 0 0 22px;
+      border-left: 3px solid var(--accent);
+      background: color-mix(in srgb, var(--accent) 5%, transparent);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      position: relative;
+    }}
+    .pull-quote::before {{
+      content: '\\201C';
+      position: absolute;
+      top: -4px; left: 8px;
+      font-size: 4.2rem;
+      line-height: 1;
+      color: var(--accent);
+      opacity: 0.16;
+      font-family: Georgia, "Times New Roman", serif;
+      pointer-events: none;
+    }}
+    .analysis-cols {{
+      column-count: 2;
+      column-gap: 38px;
+      column-rule: 1px solid var(--border);
+      orphans: 4;
+      widows: 4;
+    }}
+    .analysis-cols h2, .analysis-cols h3, .analysis-cols h4 {{
+      column-span: all;
+      break-after: avoid;
+      break-before: avoid;
+    }}
+    .analysis-cols p {{ max-width: none; break-inside: avoid; }}
+    .analysis-cols ol, .analysis-cols ul {{
+      max-width: none;
+      display: block;
+      break-inside: avoid;
+    }}
+    .analysis-cols li {{ break-inside: avoid; margin-bottom: 0.4rem; }}
+
+    /* Buttons */
+    .btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: transparent;
+      color: var(--ink-2);
       cursor: pointer;
       font: inherit;
-      padding: 9px 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 6px 13px;
+      transition: background 120ms, color 120ms, border-color 120ms;
     }}
-    .analysis-toggle {{
-      margin-top: 12px;
+    .btn:hover {{
+      background: color-mix(in srgb, var(--accent) 8%, transparent);
+      border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+      color: var(--accent);
     }}
+    .analysis-toggle {{ margin-top: 12px; }}
+
+    /* Charts */
+    .chart-grid {{
+      display: grid;
+      grid-template-columns: minmax(380px, 1.5fr) minmax(200px, 0.65fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }}
+    .mini-chart-stack {{ display: grid; gap: 12px; }}
+
+    /* Bars */
     .bars {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(20px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(14px, 1fr));
       align-items: end;
-      gap: 8px;
-      min-height: 120px;
-      padding-top: 10px;
+      gap: 4px;
+      height: 160px;
+      overflow: visible;
     }}
     .bar-wrap {{
       display: flex;
       flex-direction: column;
-      justify-content: end;
+      justify-content: flex-end;
       align-items: center;
-      gap: 8px;
-      min-width: 0;
+      gap: 4px;
+      height: 100%;
+      position: relative;
+    }}
+    .bar-wrap:hover .bar-tip {{
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }}
+    .bar-tip {{
+      position: absolute;
+      bottom: calc(100% + 5px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: var(--ink);
+      color: var(--bg);
+      font-size: 0.67rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 5px;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 140ms, transform 140ms;
     }}
     .bar {{
       width: 100%;
-      min-height: 8px;
-      border-radius: 999px 999px 6px 6px;
-      background: linear-gradient(180deg, var(--accent), #e7b96b);
+      min-height: 4px;
+      border-radius: 4px 4px 2px 2px;
+      transition: opacity 140ms;
     }}
+    .bar-wrap:hover .bar {{ opacity: 0.75; }}
     .bar-label {{
       writing-mode: vertical-rl;
       transform: rotate(180deg);
-      font-size: 0.72rem;
-      color: var(--muted);
+      font-size: 0.62rem;
+      color: var(--ink-3);
+      line-height: 1;
+      flex-shrink: 0;
     }}
-    .heatmap {{
+
+    /* Heatmap */
+    .heatmap {{ display: grid; gap: 6px; }}
+    .heat-row {{
       display: grid;
-      gap: 10px;
+      grid-template-columns: 48px repeat(12, 1fr);
+      gap: 4px;
+      align-items: center;
     }}
+    .heat-year {{ font-size: 0.68rem; font-weight: 600; color: var(--ink-3); }}
+    .month-head {{ font-size: 0.62rem; color: var(--ink-3); text-align: center; }}
+    .heat-cell {{
+      aspect-ratio: 1;
+      border-radius: 4px;
+      border: none;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 0.6rem;
+      font-weight: 600;
+      color: rgba(255,255,255,0.65);
+      cursor: pointer;
+      transition: transform 110ms, box-shadow 110ms;
+    }}
+    .heat-cell:hover {{
+      transform: scale(1.18);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      z-index: 1;
+    }}
+    .heat-cell.active {{
+      outline: 2px solid var(--accent-2);
+      outline-offset: 2px;
+    }}
+
+    /* Tag cloud */
     .tag-cloud {{
       display: flex;
       flex-wrap: wrap;
-      gap: 9px 12px;
-      align-items: center;
-      padding-top: 16px;
-      margin-top: 16px;
+      gap: 6px 9px;
+      padding-top: 14px;
+      margin-top: 14px;
       border-top: 1px solid var(--border);
+      align-items: baseline;
     }}
     .tag {{
       appearance: none;
-      border: 0;
+      border: none;
       background: transparent;
       color: var(--accent);
       cursor: pointer;
       font: inherit;
       font-weight: 700;
-      line-height: 1;
-      padding: 2px 0;
-      text-decoration: none;
-      transition: color 140ms ease, transform 140ms ease;
+      padding: 0;
+      line-height: 1.2;
+      transition: color 120ms, transform 120ms;
+      opacity: 0.82;
     }}
-    .tag:hover, .tag.active {{
-      color: var(--accent-2);
-      transform: translateY(-1px);
-      text-decoration: underline;
-      text-underline-offset: 4px;
-    }}
-    body.dark .tag {{
-      color: var(--accent);
-    }}
-    body.dark .tag:hover, body.dark .tag.active {{
-      color: var(--accent-2);
-    }}
-    .heat-row {{
-      display: grid;
-      grid-template-columns: 62px repeat(12, minmax(0, 1fr));
-      gap: 7px;
-      align-items: center;
-    }}
-    .heat-year {{
-      font-size: 0.82rem;
-      color: var(--muted);
-      font-weight: 600;
-    }}
-    .heat-cell {{
-      aspect-ratio: 1 / 1;
-      border-radius: 6px;
-      border: 1px solid rgba(31, 36, 29, 0.05);
-      display: grid;
-      place-items: center;
-      font-size: 0.7rem;
-      color: rgba(0, 0, 0, 0.55);
-      cursor: pointer;
-      font: inherit;
-    }}
-    body.dark .heat-cell {{ color: rgba(255, 255, 255, 0.72); }}
-    .heat-cell.active {{
-      outline: 2px solid var(--accent-2);
-      outline-offset: 2px;
-    }}
-    .month-head {{
-      font-size: 0.7rem;
-      color: var(--muted);
-      text-align: center;
-    }}
-    .bookmark-toolbar {{
+    .tag:hover {{ color: var(--accent-2); transform: translateY(-1px); opacity: 1; }}
+    .tag.active {{ color: var(--accent-2); opacity: 1; }}
+
+    /* Bookmark section */
+    .bm-toolbar {{
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin: 18px 0;
+      align-items: flex-end;
+      gap: 12px;
+      margin-bottom: 14px;
     }}
-    .bookmark-count {{
-      color: var(--muted);
+    #current-category {{
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      margin-bottom: 2px;
+      color: var(--ink);
     }}
+    .bm-count {{ font-size: 0.78rem; color: var(--ink-3); }}
+
+    /* Cards — 3-D flip */
     .cards {{
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 14px;
     }}
+    /* Perspective shell — fixed height makes every card uniform */
+    .card-shell {{ perspective: 1100px; height: 280px; }}
+    /* Flipper */
     .card {{
-      background: rgba(255, 253, 249, 0.88);
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 540ms cubic-bezier(0.4, 0, 0.2, 1);
+      height: 100%;
+    }}
+    @media (hover: hover) {{
+      .card-shell:hover .card {{ transform: rotateY(180deg); }}
+    }}
+    .card.flipped {{ transform: rotateY(180deg); }}
+    /* Shared face */
+    .card-face {{
+      border-radius: var(--radius);
       border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 13px;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      overflow: hidden;
+      height: 100%;
+      box-sizing: border-box;
+    }}
+    /* Front */
+    .card-front {{
+      position: relative;
+      background: var(--surface);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      padding: 14px;
+      transition: border-color 150ms, box-shadow 150ms;
+    }}
+    .card-shell:hover .card-front {{
+      border-color: color-mix(in srgb, var(--card-color, var(--accent)) 32%, transparent);
       box-shadow: var(--shadow);
     }}
-    body.dark .card {{ background: var(--panel); }}
-    .meta {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-      color: var(--muted);
-      font-size: 0.82rem;
+    .card-front::before {{
+      content: '';
+      position: absolute;
+      top: 0; left: 0; bottom: 0;
+      width: 3px;
+      border-radius: 12px 0 0 12px;
+      background: var(--card-color, var(--accent));
+      opacity: 0.55;
     }}
+    /* Back — shows the actual X post */
+    .card-back {{
+      position: absolute;
+      inset: 0;
+      background: color-mix(in srgb, var(--card-color, var(--accent)) 7%, var(--surface));
+      border-color: color-mix(in srgb, var(--card-color, var(--accent)) 26%, transparent);
+      transform: rotateY(180deg);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 14px;
+    }}
+    .tweet-hd {{
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }}
+    .tweet-avatar {{
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+      opacity: 0.88;
+    }}
+    .x-logo {{ margin-left: auto; flex-shrink: 0; opacity: 0.2; }}
+    .tweet-text {{
+      font-size: 0.88rem;
+      line-height: 1.6;
+      color: var(--ink);
+      flex: 1;
+      overflow-y: auto;
+      max-height: 155px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border-strong) transparent;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    /* Flip hint on front */
+    .flip-cue {{
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.67rem;
+      color: var(--ink-3);
+      opacity: 0.45;
+      margin-top: auto;
+      padding-top: 4px;
+      pointer-events: none;
+      user-select: none;
+    }}
+    /* Shared content styles */
+    .card-hd {{
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }}
+    .card-author {{ font-weight: 700; font-size: 0.85rem; color: var(--ink); line-height: 1; }}
+    .card-author .at {{ font-weight: 400; color: var(--ink-3); }}
+    .card-date {{ font-size: 0.72rem; color: var(--ink-3); white-space: nowrap; }}
+    .card-body {{
+      font-size: 0.855rem;
+      line-height: 1.55;
+      color: var(--ink);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+    }}
+    .card-juice {{
+      font-size: 0.8rem;
+      color: var(--ink-2);
+      line-height: 1.5;
+      font-style: italic;
+      padding: 7px 10px;
+      background: color-mix(in srgb, var(--accent-2) 7%, transparent);
+      border-left: 2px solid var(--accent-2);
+      border-radius: 0 6px 6px 0;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+    }}
+    .card-tags {{ display: flex; flex-wrap: wrap; gap: 4px; }}
     .pill {{
       display: inline-flex;
       align-items: center;
-      border-radius: 999px;
-      padding: 5px 8px;
-      background: color-mix(in srgb, var(--accent) 13%, transparent);
+      border-radius: var(--pill);
+      padding: 2px 8px;
+      font-size: 0.71rem;
+      font-weight: 500;
+      background: color-mix(in srgb, var(--card-color, var(--accent)) 10%, transparent);
+      color: var(--card-color, var(--accent));
+    }}
+    .pill.folder {{
+      background: color-mix(in srgb, var(--warn) 10%, transparent);
+      color: color-mix(in srgb, var(--warn) 75%, var(--ink));
+    }}
+    .card-links {{ display: flex; gap: 6px; flex-wrap: wrap; }}
+    .card-link {{
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+      transition: background 120ms, color 120ms, border-color 120ms;
+    }}
+    .card-link:hover {{
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      text-decoration: none;
+    }}
+    .card-link.sec {{ color: var(--ink-2); border-color: var(--border); }}
+    .card-link.sec:hover {{
+      background: color-mix(in srgb, var(--ink) 7%, transparent);
       color: var(--ink);
+      border-color: var(--border-strong);
     }}
-    .excerpt {{
-      margin: 0 0 10px;
-      line-height: 1.45;
-      font-size: 0.94rem;
-    }}
-    .summary {{
-      margin: 0 0 12px;
-      color: #344137;
-      line-height: 1.55;
-    }}
-    .links {{
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      font-size: 0.9rem;
-      margin-bottom: 12px;
-    }}
-    .load-more-wrap {{
-      display: flex;
-      justify-content: center;
-      padding-top: 16px;
-    }}
+
+    .load-more-wrap {{ display: flex; justify-content: center; padding-top: 20px; }}
+
+    /* Responsive */
     @media (max-width: 1100px) {{
       .shell {{ grid-template-columns: 1fr; }}
-      .sidebar {{
-        position: static;
-        height: auto;
-        border-right: 0;
-        border-bottom: 1px solid var(--border);
-      }}
-      .hero, .chart-grid {{ grid-template-columns: 1fr; }}
+      .sidebar {{ position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }}
+      .sidebar-body {{ max-height: 55vh; }}
+      .hero {{ grid-template-columns: repeat(2, 1fr); }}
+      .chart-grid {{ grid-template-columns: 1fr; }}
     }}
+    @media (max-width: 600px) {{
+      .hero {{ grid-template-columns: 1fr 1fr; }}
+      .main {{ padding: 14px; }}
+    }}
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {{ width: 5px; height: 5px; }}
+    ::-webkit-scrollbar-track {{ background: transparent; }}
+    ::-webkit-scrollbar-thumb {{ background: var(--border-strong); border-radius: 99px; }}
+
+    /* Fade-in */
+    @keyframes fadeUp {{
+      from {{ opacity: 0; transform: translateY(8px); }}
+      to   {{ opacity: 1; transform: translateY(0); }}
+    }}
+    .stat {{ animation: fadeUp 280ms ease both; }}
+    .stat:nth-child(1) {{ animation-delay: 30ms; }}
+    .stat:nth-child(2) {{ animation-delay: 70ms; }}
+    .stat:nth-child(3) {{ animation-delay: 110ms; }}
+    .stat:nth-child(4) {{ animation-delay: 150ms; }}
+    .panel {{ animation: fadeUp 320ms ease 160ms both; }}
   </style>
 </head>
 <body>
   <div class="shell">
+    <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-row">
-          <h1>X Bookmark Atlas</h1>
-          <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
+      <div class="sidebar-body">
+        <div class="brand">
+          <div class="brand-logo">
+            <div class="brand-gem">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2.5A1.5 1.5 0 0 1 4.5 1h7A1.5 1.5 0 0 1 13 2.5v10.086a1 1 0 0 1-1.707.707L8 10l-3.293 3.293A1 1 0 0 1 3 12.586V2.5z" fill="white"/>
+              </svg>
+            </div>
+            <span class="brand-title">Bookmark Atlas</span>
+          </div>
+          <p class="brand-desc">Navigate your saved posts by topic, timeline &amp; theme.</p>
         </div>
-        <p>Browse your saved posts by category, then read the usage patterns hiding underneath.</p>
+
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.6"/>
+              <path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <input id="search" class="search" type="search" placeholder="Search bookmarks&hellip;">
+        </div>
+
+        <p class="nav-label">Categories</p>
+        <div id="category-list" class="category-list"></div>
       </div>
-      <input id="search" class="search" type="search" placeholder="Filter categories or bookmarks">
-      <div id="category-list" class="category-list"></div>
+
+      <div class="sidebar-footer">
+        <span class="footer-wordmark">X ATLAS</span>
+        <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
+            <path id="theme-icon" d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-10a1 1 0 0 0 1-1V1a1 1 0 1 0-2 0v.5A1 1 0 0 0 8 2zm0 12a1 1 0 0 0-1 1v.5a1 1 0 1 0 2 0V15a1 1 0 0 0-1-1zm7-7h-.5a1 1 0 1 0 0 2H15a1 1 0 1 0 0-2zM2 8a1 1 0 0 0-1-1H.5a1 1 0 1 0 0 2H1a1 1 0 0 0 1-1zm10.95-3.536.354-.354a1 1 0 0 0-1.414-1.414l-.354.354a1 1 0 0 0 1.414 1.414zm-9.9 7.072-.354.354a1 1 0 0 0 1.414 1.414l.354-.354a1 1 0 0 0-1.414-1.414zm9.9.354.354.354a1 1 0 0 0 1.414-1.414l-.354-.354a1 1 0 0 0-1.414 1.414zm-9.9-7.072-.354-.354a1 1 0 0 0-1.414 1.414l.354.354a1 1 0 0 0 1.414-1.414z"/>
+          </svg>
+          <span id="theme-label">Light</span>
+        </button>
+      </div>
     </aside>
+
+    <!-- Main -->
     <main class="main">
+      <!-- Stats -->
       <section class="hero">
-        <div class="stat"><div class="label">Bookmarks</div><div id="stat-total" class="value"></div></div>
-        <div class="stat"><div class="label">Date Range</div><div id="stat-range" class="value" style="font-size:1.2rem"></div></div>
-        <div class="stat"><div class="label">Top Category</div><div id="stat-category" class="value" style="font-size:1.3rem"></div></div>
-        <div class="stat"><div class="label">Categories</div><div id="stat-categories" class="value"></div></div>
+        <div class="stat">
+          <div class="label">Total Bookmarks</div>
+          <div id="stat-total" class="value"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Date Range</div>
+          <div id="stat-range" class="value" style="font-size:0.95rem;letter-spacing:-0.02em;padding-top:6px;line-height:1.3"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Top Category</div>
+          <div id="stat-category" class="value" style="font-size:1rem;letter-spacing:-0.025em;padding-top:5px;line-height:1.2"></div>
+        </div>
+        <div class="stat">
+          <div class="label">Categories</div>
+          <div id="stat-categories" class="value"></div>
+        </div>
       </section>
 
+      <!-- Analysis -->
       <section class="analysis-section">
         <div class="panel">
-          <h2>What Your Bookmarks Say</h2>
+          <div class="panel-hd"><h2>AI Analysis</h2></div>
           <div id="analysis" class="analysis collapsed">{analysis_html}</div>
-          <button id="analysis-toggle" class="analysis-toggle" type="button">Show Full Analysis</button>
+          <button id="analysis-toggle" class="btn analysis-toggle" type="button">Show Full Analysis</button>
         </div>
       </section>
 
+      <!-- Charts -->
       <section class="chart-grid">
-        <div class="panel heatmap-panel">
-          <h2>Year / Month Heatmap</h2>
+        <div class="panel">
+          <div class="panel-hd"><h2>Activity Heatmap</h2></div>
           <div id="heatmap" class="heatmap"></div>
           <div id="tag-cloud" class="tag-cloud"></div>
         </div>
         <div class="mini-chart-stack">
           <div class="panel">
-            <h2>Bookmarks By Month</h2>
+            <div class="panel-hd"><h2>By Month</h2></div>
             <div id="month-bars" class="bars"></div>
           </div>
           <div class="panel">
-            <h2>Yearly Totals</h2>
+            <div class="panel-hd"><h2>By Year</h2></div>
             <div id="year-bars" class="bars"></div>
           </div>
         </div>
       </section>
 
+      <!-- Cards -->
       <section class="panel">
-        <div class="bookmark-toolbar">
+        <div class="bm-toolbar">
           <div>
-            <h2 id="current-category" style="margin:0 0 6px">All Categories</h2>
-            <div id="bookmark-count" class="bookmark-count"></div>
+            <div id="current-category">All Categories</div>
+            <div id="bookmark-count" class="bm-count"></div>
           </div>
-          <button id="clear-filter" class="clear-filter" type="button" hidden>Clear Filters</button>
+          <button id="clear-filter" class="btn" type="button" hidden>&#x2715;&nbsp;Clear Filters</button>
         </div>
         <div id="cards" class="cards"></div>
         <div class="load-more-wrap">
-          <button id="load-more" class="load-more" type="button" hidden>Load More</button>
+          <button id="load-more" class="btn" type="button" hidden>Load More</button>
         </div>
       </section>
     </main>
@@ -702,6 +1106,14 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       visible: PAGE_SIZE,
     }};
 
+    const PALETTE = [
+      "#6366f1","#0ea571","#f59e0b","#ef4444",
+      "#8b5cf6","#06b6d4","#f97316","#84cc16",
+      "#ec4899","#14b8a6","#a855f7","#3b82f6",
+    ];
+    const catColorMap = {{}};
+    data.categories.forEach((cat, i) => {{ catColorMap[cat.name] = PALETTE[i % PALETTE.length]; }});
+
     const categoryList = document.getElementById("category-list");
     const cards = document.getElementById("cards");
     const search = document.getElementById("search");
@@ -710,40 +1122,40 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     const clearFilter = document.getElementById("clear-filter");
     const loadMore = document.getElementById("load-more");
     const themeToggle = document.getElementById("theme-toggle");
+    const themeLabel = document.getElementById("theme-label");
+    const themeIcon = document.getElementById("theme-icon");
     const analysis = document.getElementById("analysis");
     const analysisToggle = document.getElementById("analysis-toggle");
     const tagCloud = document.getElementById("tag-cloud");
 
-    const statTotal = document.getElementById("stat-total");
-    const statRange = document.getElementById("stat-range");
-    const statCategory = document.getElementById("stat-category");
-    const statCategories = document.getElementById("stat-categories");
+    document.getElementById("stat-total").textContent = data.total;
+    document.getElementById("stat-range").textContent = `${{data.date_range.first}} → ${{data.date_range.last}}`;
+    document.getElementById("stat-category").textContent = data.top_category || "—";
+    document.getElementById("stat-categories").textContent = data.categories.length;
 
-    statTotal.textContent = data.total;
-    statRange.textContent = `${{data.date_range.first}} → ${{data.date_range.last}}`;
-    statCategory.textContent = data.top_category || "—";
-    statCategories.textContent = data.categories.length;
+    const moonPath = "M8 3a5 5 0 1 0 4.03 7.97A5.5 5.5 0 0 1 5 7.5 5.5 5.5 0 0 1 8 3z";
+    const sunPath = "M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-10a1 1 0 0 0 1-1V1a1 1 0 1 0-2 0v.5A1 1 0 0 0 8 2zm0 12a1 1 0 0 0-1 1v.5a1 1 0 1 0 2 0V15a1 1 0 0 0-1-1zm7-7h-.5a1 1 0 1 0 0 2H15a1 1 0 1 0 0-2zM2 8a1 1 0 0 0-1-1H.5a1 1 0 1 0 0 2H1a1 1 0 0 0 1-1zm10.95-3.536.354-.354a1 1 0 0 0-1.414-1.414l-.354.354a1 1 0 0 0 1.414 1.414zm-9.9 7.072-.354.354a1 1 0 0 0 1.414 1.414l.354-.354a1 1 0 0 0-1.414-1.414zm9.9.354.354.354a1 1 0 0 0 1.414-1.414l-.354-.354a1 1 0 0 0-1.414 1.414zm-9.9-7.072-.354-.354a1 1 0 0 0-1.414 1.414l.354.354a1 1 0 0 0 1.414-1.414z";
 
-    const savedTheme = localStorage.getItem("bookmark-dashboard-theme");
-    if (savedTheme === "dark") {{
-      document.body.classList.add("dark");
-      themeToggle.setAttribute("aria-label", "Switch to light mode");
-      themeToggle.setAttribute("title", "Switch to light mode");
+    function applyTheme(dark) {{
+      document.body.classList.toggle("dark", dark);
+      themeLabel.textContent = dark ? "Dark" : "Light";
+      themeIcon.setAttribute("d", dark ? moonPath : sunPath);
+      themeToggle.setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
     }}
 
+    const savedTheme = localStorage.getItem("bm-theme");
+    applyTheme(savedTheme === "dark");
+
     themeToggle.addEventListener("click", () => {{
-      document.body.classList.toggle("dark");
-      const isDark = document.body.classList.contains("dark");
-      themeToggle.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
-      themeToggle.setAttribute("title", isDark ? "Switch to light mode" : "Switch to dark mode");
-      localStorage.setItem("bookmark-dashboard-theme", isDark ? "dark" : "light");
+      const isDark = !document.body.classList.contains("dark");
+      applyTheme(isDark);
+      localStorage.setItem("bm-theme", isDark ? "dark" : "light");
     }});
 
     analysisToggle.addEventListener("click", () => {{
       analysis.classList.toggle("collapsed");
       analysisToggle.textContent = analysis.classList.contains("collapsed")
-        ? "Show Full Analysis"
-        : "Show Less";
+        ? "Show Full Analysis" : "Show Less";
     }});
 
     function collapseAnalysis() {{
@@ -754,54 +1166,54 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     function colorForCount(count, max) {{
       if (!count) return "var(--heat-empty)";
       const ratio = Math.max(0.08, count / Math.max(max, 1));
-      return `color-mix(in srgb, var(--accent) ${{Math.round(18 + ratio * 70)}}%, transparent)`;
+      return `color-mix(in srgb, var(--accent) ${{Math.round(16 + ratio * 72)}}%, transparent)`;
     }}
 
     function scrollToCards() {{
       cards.closest(".panel").scrollIntoView({{ behavior: "smooth", block: "start" }});
     }}
 
-    function bookmarkSearchText(bookmark) {{
-      return [bookmark.author, bookmark.text, bookmark.juice, bookmark.category, bookmark.folder_name]
-        .join(" ")
-        .toLowerCase();
+    function bookmarkSearchText(b) {{
+      return [b.author, b.text, b.juice, b.category, b.folder_name].join(" ").toLowerCase();
     }}
 
     function ensureCategoryVisible() {{
       if (state.category === "All") return;
-      const exists = filteredCategories().some(item => item.name === state.category);
-      if (!exists) state.category = "All";
+      if (!filteredCategories().some(c => c.name === state.category)) state.category = "All";
     }}
 
     function renderBars() {{
       const monthBars = document.getElementById("month-bars");
       const yearBars = document.getElementById("year-bars");
-      const maxMonth = Math.max(...data.month_series.map(item => item.count), 1);
-      monthBars.innerHTML = data.month_series.map(item => `
-        <div class="bar-wrap" title="${{item.month}}: ${{item.count}}">
-          <div class="bar" style="height:${{Math.max(10, (item.count / maxMonth) * 92)}}px"></div>
-          <div class="bar-label">${{item.month}}</div>
+
+      const maxMonth = Math.max(...data.month_series.map(d => d.count), 1);
+      monthBars.innerHTML = data.month_series.map(d => `
+        <div class="bar-wrap">
+          <div class="bar-tip">${{d.month}}: ${{d.count}}</div>
+          <div class="bar" style="height:${{Math.max(5,(d.count/maxMonth)*108)}}px;background:linear-gradient(180deg,var(--accent),color-mix(in srgb,var(--accent) 55%,var(--accent-2)))"></div>
+          <div class="bar-label">${{d.month.slice(2)}}</div>
         </div>
       `).join("");
 
-      const maxYear = Math.max(...data.year_counts.map(item => item.count), 1);
-      yearBars.innerHTML = data.year_counts.map(item => `
-        <div class="bar-wrap" title="${{item.year}}: ${{item.count}}">
-          <div class="bar" style="height:${{Math.max(10, (item.count / maxYear) * 92)}}px;background:linear-gradient(180deg,var(--accent-2),var(--accent))"></div>
-          <div class="bar-label">${{item.year}}</div>
+      const maxYear = Math.max(...data.year_counts.map(d => d.count), 1);
+      yearBars.innerHTML = data.year_counts.map(d => `
+        <div class="bar-wrap">
+          <div class="bar-tip">${{d.year}}: ${{d.count}}</div>
+          <div class="bar" style="height:${{Math.max(5,(d.count/maxYear)*108)}}px;background:linear-gradient(180deg,var(--accent-2),color-mix(in srgb,var(--accent-2) 55%,var(--accent)))"></div>
+          <div class="bar-label">${{d.year}}</div>
         </div>
       `).join("");
     }}
 
     function renderHeatmap() {{
       const heatmap = document.getElementById("heatmap");
-      const monthLabels = ["", "Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      const max = Math.max(...data.month_series.map(item => item.count), 1);
-      const header = `<div class="heat-row">${{monthLabels.map(label => `<div class="month-head">${{label}}</div>`).join("")}}</div>`;
+      const monthLabels = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      const max = Math.max(...data.month_series.map(d => d.count), 1);
+      const header = `<div class="heat-row">${{monthLabels.map(l => `<div class="month-head">${{l}}</div>`).join("")}}</div>`;
       const rows = data.heatmap.map(row => `
         <div class="heat-row">
           <div class="heat-year">${{row.year}}</div>
-          ${{row.months.map(cell => `<button class="heat-cell ${{state.month === cell.key ? "active" : ""}}" type="button" data-month="${{cell.key}}" title="${{cell.key}}: ${{cell.count}}" style="background:${{colorForCount(cell.count, max)}}">${{cell.count || ""}}</button>`).join("")}}
+          ${{row.months.map(cell => `<button class="heat-cell ${{state.month === cell.key ? "active" : ""}}" type="button" data-month="${{cell.key}}" title="${{cell.key}}: ${{cell.count}}" style="background:${{colorForCount(cell.count,max)}}">${{cell.count || ""}}</button>`).join("")}}
         </div>
       `).join("");
       heatmap.innerHTML = header + rows;
@@ -811,10 +1223,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           state.month = state.month === cell.dataset.month ? "" : cell.dataset.month;
           state.visible = PAGE_SIZE;
           ensureCategoryVisible();
-          renderHeatmap();
-          renderTagCloud();
-          renderCategories();
-          renderCards();
+          renderHeatmap(); renderTagCloud(); renderCategories(); renderCards();
           scrollToCards();
         }});
       }});
@@ -830,9 +1239,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
           state.tag = state.tag === tag.dataset.tag ? "" : tag.dataset.tag;
           state.visible = PAGE_SIZE;
           ensureCategoryVisible();
-          renderTagCloud();
-          renderCategories();
-          renderCards();
+          renderTagCloud(); renderCategories(); renderCards();
           scrollToCards();
         }});
       }});
@@ -840,114 +1247,152 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
 
     function filteredCategories() {{
       const query = state.query.trim().toLowerCase();
-      return data.categories
-        .map(category => {{
-          const bookmarks = category.bookmarks.filter(bookmark =>
-            (!state.month || bookmark.created_at.startsWith(state.month)) &&
-            (!state.tag || bookmarkSearchText(bookmark).includes(state.tag)) &&
-            (!query || bookmarkSearchText(bookmark).includes(query))
-          );
-          if ((!query || category.name.toLowerCase().includes(query)) && (!state.month || bookmarks.length) && (!state.tag || bookmarks.length)) {{
-            return {{ ...category, bookmarks }};
-          }}
-          if (bookmarks.length) {{
-            return {{ ...category, bookmarks }};
-          }}
-          return null;
-        }})
-        .filter(Boolean);
+      return data.categories.map(cat => {{
+        const bookmarks = cat.bookmarks.filter(b =>
+          (!state.month || b.created_at.startsWith(state.month)) &&
+          (!state.tag || bookmarkSearchText(b).includes(state.tag)) &&
+          (!query || bookmarkSearchText(b).includes(query))
+        );
+        if ((!query || cat.name.toLowerCase().includes(query)) && (!state.month || bookmarks.length) && (!state.tag || bookmarks.length))
+          return {{ ...cat, bookmarks }};
+        if (bookmarks.length) return {{ ...cat, bookmarks }};
+        return null;
+      }}).filter(Boolean);
     }}
 
     function renderCategories() {{
-      const categories = filteredCategories();
-      const allCount = categories.reduce((sum, item) => sum + item.bookmarks.length, 0);
+      const cats = filteredCategories();
+      const allCount = cats.reduce((s, c) => s + c.bookmarks.length, 0);
       const buttons = [`
         <button class="category-button ${{state.category === "All" ? "active" : ""}}" data-category="All">
-          <span>All Categories</span>
+          <span class="cat-name">
+            <span class="cat-dot" style="background:linear-gradient(135deg,var(--accent),var(--accent-2))"></span>
+            <span class="cat-label">All Categories</span>
+          </span>
           <span class="category-count">${{allCount}}</span>
         </button>
       `];
-
-      for (const category of categories) {{
+      cats.forEach(cat => {{
+        const color = catColorMap[cat.name] || "var(--accent)";
         buttons.push(`
-          <button class="category-button ${{state.category === category.name ? "active" : ""}}" data-category="${{category.name}}">
-            <span>${{category.name}}</span>
-            <span class="category-count">${{category.bookmarks.length}}</span>
+          <button class="category-button ${{state.category === cat.name ? "active" : ""}}" data-category="${{cat.name}}">
+            <span class="cat-name">
+              <span class="cat-dot" style="background:${{color}}"></span>
+              <span class="cat-label">${{cat.name}}</span>
+            </span>
+            <span class="category-count">${{cat.bookmarks.length}}</span>
           </button>
         `);
-      }}
-
+      }});
       categoryList.innerHTML = buttons.join("");
-      categoryList.querySelectorAll(".category-button").forEach(button => {{
-        button.addEventListener("click", () => {{
+      categoryList.querySelectorAll(".category-button").forEach(btn => {{
+        btn.addEventListener("click", () => {{
           collapseAnalysis();
-          state.category = button.dataset.category;
+          state.category = btn.dataset.category;
           state.visible = PAGE_SIZE;
-          renderCategories();
-          renderCards();
+          renderCategories(); renderCards();
           scrollToCards();
         }});
       }});
     }}
 
     function currentBookmarks() {{
-      const categories = filteredCategories();
-      if (state.category === "All") {{
-        return categories.flatMap(category => category.bookmarks)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at));
-      }}
-      const category = categories.find(item => item.name === state.category);
-      return category ? category.bookmarks : [];
+      const cats = filteredCategories();
+      if (state.category === "All")
+        return cats.flatMap(c => c.bookmarks).sort((a,b) => b.created_at.localeCompare(a.created_at));
+      const cat = cats.find(c => c.name === state.category);
+      return cat ? cat.bookmarks : [];
+    }}
+
+    function escapeHtml(s) {{
+      return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }}
 
     function renderCards() {{
       const bookmarks = currentBookmarks();
       currentCategory.textContent = state.category === "All" ? "All Categories" : state.category;
-      const monthLabel = state.month ? ` in ${{state.month}}` : "";
-      const tagLabel = state.tag ? ` tagged "${{state.tag}}"` : "";
+      const monthLabel = state.month ? ` · ${{state.month}}` : "";
+      const tagLabel = state.tag ? ` · "${{state.tag}}"` : "";
       bookmarkCount.textContent = `${{bookmarks.length}} bookmarks${{monthLabel}}${{tagLabel}}`;
       clearFilter.hidden = !state.month && !state.tag;
-      const visibleBookmarks = bookmarks.slice(0, state.visible);
+      const visible = bookmarks.slice(0, state.visible);
       loadMore.hidden = state.visible >= bookmarks.length;
       loadMore.textContent = `Load More (${{Math.max(bookmarks.length - state.visible, 0)}} remaining)`;
 
-      cards.innerHTML = visibleBookmarks.map(bookmark => `
-        <article class="card">
-          <div class="meta">
-            <span class="pill">${{bookmark.created_label}}</span>
-            <span class="pill">@${{bookmark.author || "unknown"}}</span>
-            ${{bookmark.folder_name ? `<span class="pill">Folder: ${{bookmark.folder_name}}</span>` : ""}}
+      cards.innerHTML = visible.map(b => {{
+        const color = catColorMap[b.category] || "var(--accent)";
+        const dateShort = b.created_label ? b.created_label.slice(0, 10) : "";
+        const initials = (b.author || "?").slice(0, 2).toUpperCase();
+        return `
+          <div class="card-shell" style="--card-color:${{color}}">
+            <div class="card">
+              <!-- Front: summary view -->
+              <div class="card-face card-front">
+                <div class="card-hd">
+                  <div class="card-author"><span class="at">@</span>${{b.author || "unknown"}}</div>
+                  <div class="card-date">${{dateShort}}</div>
+                </div>
+                ${{b.excerpt ? `<div class="card-body">${{b.excerpt}}</div>` : ""}}
+                ${{b.juice ? `<div class="card-juice">${{b.juice}}</div>` : ""}}
+                <div class="card-tags">
+                  <span class="pill">${{b.category || "Uncategorized"}}</span>
+                  ${{b.folder_name ? `<span class="pill folder">${{b.folder_name}}</span>` : ""}}
+                </div>
+                <div class="card-links">
+                  <a class="card-link" href="${{b.tweet_url}}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">
+                    Open post ↗
+                  </a>
+                  ${{b.resolved_url ? `<a class="card-link sec" href="${{b.resolved_url}}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Article</a>` : ""}}
+                </div>
+                <div class="flip-cue">
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.9A5.002 5.002 0 0 0 8 3zM3.1 9a5.002 5.002 0 0 0 8.757 2.182.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.1z"/></svg>
+                  hover to see post
+                </div>
+              </div>
+              <!-- Back: raw X post -->
+              <div class="card-face card-back">
+                <div class="tweet-hd">
+                  <div class="tweet-avatar" style="background:${{color}}">${{initials}}</div>
+                  <div>
+                    <div class="card-author"><span class="at">@</span>${{b.author || "unknown"}}</div>
+                    <div class="card-date">${{dateShort}}</div>
+                  </div>
+                  <svg class="x-logo" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.91-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                </div>
+                <div class="tweet-text">${{escapeHtml(b.text)}}</div>
+                <div class="card-links" style="margin-top:auto">
+                  <a class="card-link" href="${{b.tweet_url}}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Open on X ↗</a>
+                  ${{b.resolved_url ? `<a class="card-link sec" href="${{b.resolved_url}}" target="_blank" rel="noreferrer" onclick="event.stopPropagation()">Article</a>` : ""}}
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="excerpt">${{bookmark.excerpt || ""}}</p>
-          <p class="summary">${{bookmark.juice || ""}}</p>
-          <div class="links">
-            <a href="${{bookmark.tweet_url}}" target="_blank" rel="noreferrer">Open post</a>
-            ${{bookmark.resolved_url ? `<a href="${{bookmark.resolved_url}}" target="_blank" rel="noreferrer">Open article</a>` : ""}}
-          </div>
-        </article>
-      `).join("");
+        `;
+      }}).join("");
+
+      /* Touch: click anywhere on shell toggles flip */
+      if (window.matchMedia("(hover: none)").matches) {{
+        cards.querySelectorAll(".card-shell").forEach(shell => {{
+          shell.addEventListener("click", () => {{
+            shell.querySelector(".card").classList.toggle("flipped");
+          }});
+        }});
+      }}
     }}
 
-    search.addEventListener("input", event => {{
+    search.addEventListener("input", e => {{
       collapseAnalysis();
-      state.query = event.target.value;
+      state.query = e.target.value;
       state.visible = PAGE_SIZE;
-      if (state.category !== "All") {{
-        ensureCategoryVisible();
-      }}
-      renderCategories();
-      renderCards();
+      if (state.category !== "All") ensureCategoryVisible();
+      renderCategories(); renderCards();
     }});
 
     clearFilter.addEventListener("click", () => {{
       collapseAnalysis();
-      state.month = "";
-      state.tag = "";
+      state.month = ""; state.tag = "";
       state.visible = PAGE_SIZE;
-      renderHeatmap();
-      renderTagCloud();
-      renderCategories();
-      renderCards();
+      renderHeatmap(); renderTagCloud(); renderCategories(); renderCards();
     }});
 
     loadMore.addEventListener("click", () => {{
@@ -956,11 +1401,33 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       renderCards();
     }});
 
+    function reformatAnalysis() {{
+      const el = document.getElementById("analysis");
+      if (!el || !el.children.length) return;
+      /* Promote first paragraph to pull-quote */
+      const firstP = el.querySelector("p");
+      if (firstP) {{
+        const quote = document.createElement("blockquote");
+        quote.className = "pull-quote";
+        quote.innerHTML = firstP.innerHTML;
+        firstP.replaceWith(quote);
+      }}
+      /* Wrap remaining content in two-column layout */
+      const rest = Array.from(el.children).filter(c => c.tagName !== "BLOCKQUOTE");
+      if (rest.length > 0) {{
+        const cols = document.createElement("div");
+        cols.className = "analysis-cols";
+        rest.forEach(c => cols.appendChild(c));
+        el.appendChild(cols);
+      }}
+    }}
+
     renderBars();
     renderHeatmap();
     renderTagCloud();
     renderCategories();
     renderCards();
+    reformatAnalysis();
   </script>
 </body>
 </html>
