@@ -474,8 +474,8 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       align-items: stretch;
     }}
     .metrics-stack {{
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 6px;
     }}
     /* Compact metric card */
@@ -483,13 +483,12 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 9px 14px 10px;
+      padding: 9px 12px 9px;
       box-shadow: var(--shadow-xs);
       display: flex;
       flex-direction: column;
       gap: 2px;
       overflow: hidden;
-      flex: 1;
       transition: box-shadow 160ms, border-color 160ms;
     }}
     .mcard:hover {{
@@ -530,8 +529,8 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
       font-size: 0.6rem;
       color: var(--ink-3);
     }}
-    .mcard-spark {{ line-height: 0; margin-top: 3px; }}
-    .mcard-spark svg {{ display: block; width: 100%; height: 22px; }}
+    .mcard-spark {{ line-height: 0; margin-top: auto; padding-top: 4px; }}
+    .mcard-spark svg {{ display: block; width: 100%; height: 18px; }}
     /* Trend badge — inline next to number */
     .trend-badge {{
       font-size: 0.6rem;
@@ -546,27 +545,29 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     .mcard-cats {{
       display: flex;
       align-items: stretch;
-      gap: 10px;
+      gap: 8px;
       flex: 1;
       min-height: 0;
-      padding-top: 2px;
+      margin-top: auto;
+      padding-top: 4px;
     }}
     .cats-nums {{
       flex-shrink: 0;
       display: flex;
       flex-direction: column;
       justify-content: center;
+      min-width: 0;
     }}
     .cats-treemap {{
       flex: 1;
       min-width: 0;
-      min-height: 40px;
+      min-height: 36px;
       display: flex;
       align-items: stretch;
       border-radius: 5px;
       overflow: hidden;
     }}
-    .cats-treemap svg {{ flex: 1; border-radius: 5px; }}
+    .cats-treemap svg {{ flex: 1; border-radius: 5px; display: block; }}
 
     /* Panels */
     .panel {{
@@ -1343,12 +1344,6 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
         if (gw <= 0 || gh <= 0) return;
         const fill = PALETTE[i % PALETTE.length];
         parts.push(`<rect x="${{gx.toFixed(1)}}" y="${{gy.toFixed(1)}}" width="${{gw.toFixed(1)}}" height="${{gh.toFixed(1)}}" fill="${{fill}}" rx="3"><title>${{rect.name}}: ${{rect.count}}</title></rect>`);
-        const fs = Math.min(gw / 4.5, gh / 2, 9);
-        if (fs >= 5.5) {{
-          const tx = (gx + gw / 2).toFixed(1), ty = (gy + gh / 2).toFixed(1);
-          const nm = rect.name.split(/[\\s&(]/)[0];
-          parts.push(`<text x="${{tx}}" y="${{ty}}" text-anchor="middle" dominant-baseline="middle" font-family="inherit" font-size="${{fs.toFixed(1)}}" fill="rgba(255,255,255,0.92)" font-weight="700">${{nm}}</text>`);
-        }}
       }});
       return `<svg viewBox="0 0 ${{vw}} ${{vh}}" preserveAspectRatio="none" style="display:block;width:100%;height:100%">${{parts.join("")}}</svg>`;
     }}
@@ -1486,7 +1481,7 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
         }});
       }});
       const sidebarClear = document.getElementById("sidebar-clear");
-      if (sidebarClear) sidebarClear.hidden = state.category === "All";
+      if (sidebarClear) sidebarClear.hidden = state.category === "All" && !state.tag;
     }}
 
     function currentBookmarks() {{
@@ -1592,8 +1587,9 @@ def render_html(bookmarks: list[dict], analysis: str) -> str:
     if (sidebarClearBtn) {{
       sidebarClearBtn.addEventListener("click", () => {{
         state.category = "All";
+        state.tag = "";
         state.visible = PAGE_SIZE;
-        renderCategories(); renderCards();
+        renderTagCloud(); renderCategories(); renderCards();
       }});
     }}
 
