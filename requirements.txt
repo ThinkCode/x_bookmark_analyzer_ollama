@@ -1,3 +1,2 @@
 httpx
 playwright
-browser-cookie3

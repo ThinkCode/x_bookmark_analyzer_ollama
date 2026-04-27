@@ -1,12 +1,21 @@
 """X bookmark scraping through an existing Chrome CDP session."""
 import re
+import subprocess
 import sys
 import time
+from urllib.parse import urlparse
 
 from .config import CDP_URL, FOLDER_SCAN_STABLE_SCROLLS, SCRAPE_TEST_LIMIT
 from .models import clean_text, folder_category_from_name, normalize_label, timestamp_iso
 
 # --- Scraping ---
+
+FAST_WAIT_MS = 250
+FOLDER_RENDER_WAIT_MS = 700
+TIMELINE_RENDER_WAIT_MS = 1200
+TIMELINE_STABLE_SCROLLS = 3
+FOLDER_SCROLL_OFFSETS: dict[str, int] = {}
+CHROME_CDP_PROFILE = "/tmp/chrome-playwright-x"
 
 FOLDER_BLACKLIST = {
     "all bookmarks",
@@ -67,16 +76,134 @@ def extract_visible_folder_names(page) -> list[str]:
     return names
 
 
+def scroll_metrics(page) -> dict:
+    return page.evaluate(
+        """() => ({
+            y: Math.round(window.scrollY),
+            height: Math.round(document.body.scrollHeight),
+            innerHeight: Math.round(window.innerHeight)
+        })"""
+    )
+
+
+def visible_tweet_ids(page) -> list[str]:
+    return page.evaluate(
+        """() => Array.from(document.querySelectorAll('a[href*="/status/"]'))
+            .map((anchor) => anchor.href.match(/\\/status\\/(\\d+)/)?.[1])
+            .filter(Boolean)"""
+    )
+
+
+def wait_for_folder_scroll_update(page, before_names: list[str], before_metrics: dict) -> None:
+    try:
+        page.wait_for_function(
+            """({ beforeNames, beforeY, beforeHeight }) => {
+                const names = Array.from(document.querySelectorAll(
+                    '[data-testid="cellInnerDiv"], a[href*="/i/bookmarks"], div[role="button"]'
+                ))
+                    .map((el) => (el.innerText || "").split("\\n")[0].trim())
+                    .filter(Boolean);
+                return Math.round(window.scrollY) !== beforeY ||
+                    Math.round(document.body.scrollHeight) !== beforeHeight ||
+                    names.some((name) => !beforeNames.includes(name));
+            }""",
+            arg={
+                "beforeNames": before_names,
+                "beforeY": before_metrics["y"],
+                "beforeHeight": before_metrics["height"],
+            },
+            timeout=FOLDER_RENDER_WAIT_MS,
+        )
+    except Exception:
+        pass
+
+
+def wait_for_timeline_update(page, before_ids: list[str], before_metrics: dict) -> bool:
+    try:
+        page.wait_for_function(
+            """({ beforeIds, beforeY, beforeHeight }) => {
+                const ids = Array.from(document.querySelectorAll('a[href*="/status/"]'))
+                    .map((anchor) => anchor.href.match(/\\/status\\/(\\d+)/)?.[1])
+                    .filter(Boolean);
+                return ids.some((id) => !beforeIds.includes(id)) ||
+                    Math.round(window.scrollY) !== beforeY ||
+                    Math.round(document.body.scrollHeight) !== beforeHeight;
+            }""",
+            arg={
+                "beforeIds": before_ids,
+                "beforeY": before_metrics["y"],
+                "beforeHeight": before_metrics["height"],
+            },
+            timeout=TIMELINE_RENDER_WAIT_MS,
+        )
+        return True
+    except Exception:
+        return False
+
+
+def wait_for_top(page) -> None:
+    try:
+        page.wait_for_function("() => Math.round(window.scrollY) === 0", timeout=FAST_WAIT_MS)
+    except Exception:
+        pass
+
+
+def chrome_cdp_launch_command() -> list[str]:
+    port = urlparse(CDP_URL).port or 9222
+    return [
+        "open",
+        "-na",
+        "Google Chrome",
+        "--args",
+        f"--remote-debugging-port={port}",
+        f"--user-data-dir={CHROME_CDP_PROFILE}",
+    ]
+
+
+def connect_chrome_over_cdp(playwright, allow_failure: bool):
+    print(f"Connecting to existing Chrome via CDP: {CDP_URL}")
+    try:
+        return playwright.chromium.connect_over_cdp(CDP_URL)
+    except Exception:
+        pass
+
+    if sys.platform == "darwin":
+        command = chrome_cdp_launch_command()
+        print("\nCould not connect to Chrome over CDP. Starting a dedicated Chrome debugging window...")
+        try:
+            subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception as exc:
+            print(f"Could not launch Chrome automatically: {exc}")
+        else:
+            deadline = time.monotonic() + 12
+            while time.monotonic() < deadline:
+                try:
+                    return playwright.chromium.connect_over_cdp(CDP_URL)
+                except Exception:
+                    time.sleep(0.5)
+
+    if allow_failure:
+        print("\nCould not connect to Chrome over CDP. Continuing with cached bookmarks only.")
+        return None
+
+    print("\nCould not connect to Chrome over CDP.")
+    print("Launch Chrome with this command first:")
+    print(f"  {' '.join(chrome_cdp_launch_command())}")
+    print("Then open x.com, log in, and run this script again.")
+    sys.exit(1)
+
+
 def extract_folder_names(page) -> list[str]:
     """Scroll the virtualized X folder list until no new folder names appear."""
     names = []
     seen = set()
+    FOLDER_SCROLL_OFFSETS.clear()
     stable_scrolls = 0
     last_scroll_y = -1
     last_height = -1
 
     page.evaluate("window.scrollTo(0, 0)")
-    page.wait_for_timeout(800)
+    wait_for_top(page)
 
     while stable_scrolls < FOLDER_SCAN_STABLE_SCROLLS:
         new_names = 0
@@ -84,23 +211,14 @@ def extract_folder_names(page) -> list[str]:
             if name not in seen:
                 seen.add(name)
                 names.append(name)
+                FOLDER_SCROLL_OFFSETS[name] = scroll_metrics(page)["y"]
                 new_names += 1
 
-        metrics = page.evaluate(
-            """() => ({
-                y: Math.round(window.scrollY),
-                height: Math.round(document.body.scrollHeight),
-                innerHeight: Math.round(window.innerHeight)
-            })"""
-        )
+        before_names = extract_visible_folder_names(page)
+        metrics = scroll_metrics(page)
         page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
-        page.wait_for_timeout(1200)
-        next_metrics = page.evaluate(
-            """() => ({
-                y: Math.round(window.scrollY),
-                height: Math.round(document.body.scrollHeight)
-            })"""
-        )
+        wait_for_folder_scroll_update(page, before_names, metrics)
+        next_metrics = scroll_metrics(page)
 
         moved = next_metrics["y"] != metrics["y"]
         height_changed = next_metrics["height"] != metrics["height"]
@@ -114,7 +232,7 @@ def extract_folder_names(page) -> list[str]:
         print(f"  {len(names)} bookmark folders discovered...", end="\r")
 
     page.evaluate("window.scrollTo(0, 0)")
-    page.wait_for_timeout(800)
+    wait_for_top(page)
     print(f"  {len(names)} bookmark folders discovered.")
     return names
 
@@ -122,15 +240,18 @@ def extract_folder_names(page) -> list[str]:
 def find_folder_button(page, folder_name: str):
     try:
         candidate = page.get_by_text(folder_name, exact=True).first
-        candidate.wait_for(timeout=750)
+        candidate.wait_for(timeout=FAST_WAIT_MS)
         return candidate
     except Exception:
         return None
 
 
 def scroll_to_folder(page, folder_name: str) -> bool:
-    page.evaluate("window.scrollTo(0, 0)")
-    page.wait_for_timeout(500)
+    offset = FOLDER_SCROLL_OFFSETS.get(folder_name, 0)
+    page.evaluate(
+        "(offset) => window.scrollTo(0, Math.max(0, offset - window.innerHeight * 0.25))",
+        offset,
+    )
     stable_scrolls = 0
     last_scroll_y = -1
     last_height = -1
@@ -139,20 +260,11 @@ def scroll_to_folder(page, folder_name: str) -> bool:
         if find_folder_button(page, folder_name):
             return True
 
-        metrics = page.evaluate(
-            """() => ({
-                y: Math.round(window.scrollY),
-                height: Math.round(document.body.scrollHeight)
-            })"""
-        )
+        before_names = extract_visible_folder_names(page)
+        metrics = scroll_metrics(page)
         page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
-        page.wait_for_timeout(800)
-        next_metrics = page.evaluate(
-            """() => ({
-                y: Math.round(window.scrollY),
-                height: Math.round(document.body.scrollHeight)
-            })"""
-        )
+        wait_for_folder_scroll_update(page, before_names, metrics)
+        next_metrics = scroll_metrics(page)
 
         if next_metrics["y"] == last_scroll_y and next_metrics["height"] == last_height:
             stable_scrolls += 1
@@ -230,7 +342,7 @@ def collect_bookmarks_from_timeline(
     bookmarks = []
     metadata_updates = 0
     no_new = 0
-    while no_new < 5:
+    while no_new < TIMELINE_STABLE_SCROLLS:
         tweet_els = page.query_selector_all('[data-testid="tweet"]')
         new = 0
 
@@ -252,8 +364,12 @@ def collect_bookmarks_from_timeline(
                 continue
 
         no_new = no_new + 1 if new == 0 else 0
+        before_ids = visible_tweet_ids(page)
+        before_metrics = scroll_metrics(page)
         page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-        time.sleep(2.0)
+        updated = wait_for_timeline_update(page, before_ids, before_metrics)
+        if not updated and before_metrics["y"] + before_metrics["innerHeight"] >= before_metrics["height"] - 2:
+            no_new = TIMELINE_STABLE_SCROLLS
         print(f"  {len(bookmarks)} new bookmarks collected...", end="\r")
 
     return bookmarks, False, metadata_updates
@@ -263,8 +379,23 @@ def open_folder(page, folder_name: str) -> bool:
     try:
         if not scroll_to_folder(page, folder_name):
             return False
+        before_url = page.url
+        before_ids = visible_tweet_ids(page)
         page.get_by_text(folder_name, exact=True).first.click(timeout=5000)
-        page.wait_for_timeout(1500)
+        try:
+            page.wait_for_function(
+                """({ beforeUrl, beforeIds }) => {
+                    const ids = Array.from(document.querySelectorAll('a[href*="/status/"]'))
+                        .map((anchor) => anchor.href.match(/\\/status\\/(\\d+)/)?.[1])
+                        .filter(Boolean);
+                    return location.href !== beforeUrl ||
+                        ids.some((id) => !beforeIds.includes(id));
+                }""",
+                arg={"beforeUrl": before_url, "beforeIds": before_ids},
+                timeout=5000,
+            )
+        except Exception:
+            return bookmarks_surface_ready(page)
         return True
     except Exception:
         return False
@@ -286,11 +417,18 @@ def bookmarks_surface_ready(page) -> bool:
 
 
 def wait_for_bookmarks_surface(page, timeout_ms: int) -> bool:
-    deadline = time.time() + (timeout_ms / 1000.0)
-    while time.time() < deadline:
-        if bookmarks_surface_ready(page):
-            return True
-        page.wait_for_timeout(750)
+    try:
+        page.wait_for_function(
+            """() => Boolean(
+                document.querySelector('[data-testid="tweet"]') ||
+                document.querySelector('input[placeholder*="Search Bookmarks"]') ||
+                document.querySelector('[data-testid="cellInnerDiv"]')
+            )""",
+            timeout=timeout_ms,
+        )
+        return True
+    except Exception:
+        pass
     return bookmarks_surface_ready(page)
 
 
@@ -316,18 +454,9 @@ def scrape_bookmarks(
     metadata_updates = 0
 
     with sync_playwright() as p:
-        print(f"Connecting to existing Chrome via CDP: {CDP_URL}")
-        try:
-            browser = p.chromium.connect_over_cdp(CDP_URL)
-        except Exception:
-            if allow_failure:
-                print("\nCould not connect to Chrome over CDP. Continuing with cached bookmarks only.")
-                return []
-            print("\nCould not connect to Chrome over CDP.")
-            print("Launch Chrome with this command first:")
-            print('  open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-playwright-x')
-            print("Then open x.com, log in, and run this script again.")
-            sys.exit(1)
+        browser = connect_chrome_over_cdp(p, allow_failure)
+        if browser is None:
+            return []
 
         if not browser.contexts:
             if allow_failure:
@@ -356,7 +485,7 @@ def scrape_bookmarks(
                 browser.close()
                 sys.exit(1)
 
-        page.wait_for_timeout(1500)
+        wait_for_bookmarks_surface(page, 5000)
         folder_names = extract_folder_names(page)
 
         if folder_names:
@@ -382,7 +511,7 @@ def scrape_bookmarks(
                     print(f"\nNo new bookmarks in folder '{folder_name}'. Stopping incremental scan.")
                     break
                 page.goto("https://x.com/i/bookmarks")
-                page.wait_for_timeout(1500)
+                wait_for_bookmarks_surface(page, 5000)
         else:
             fallback_bookmarks, _, folder_metadata_updates = collect_bookmarks_from_timeline(
                 page,

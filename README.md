@@ -71,31 +71,30 @@ This repo includes [requirements.txt](/Users/username/x-bookmarks/x_bookmark_ana
 
 Setup With `uv`
 
-If `uv` is not on your `PATH`, you can use it directly from:
+Make sure `uv` is on your `PATH`, you can alse use it directly:
 
 ```bash
-~/Library/Python/3.13/bin/uv
+uv init
 ```
 
 Create the virtual environment:
 
 ```bash
-~/Library/Python/3.13/bin/uv venv .venv
+uv venv
 ```
 
 Install dependencies:
 
 ```bash
-env UV_CACHE_DIR=$PWD/.uv-cache \
-  ~/Library/Python/3.13/bin/uv pip install -r requirements.txt --python .venv/bin/python
+uv pip install -r requirements.txt
 ```
 
 Ollama Setup
 
-Start Ollama and pull the model:
+Start Ollama and pull the model your machine can handle:
 
 ```bash
-ollama pull gemma4:e2b
+ollama pull gemma4:26b
 ollama serve
 ```
 
@@ -141,8 +140,7 @@ Run
 From the project directory:
 
 ```bash
-env UV_CACHE_DIR=$PWD/.uv-cache \
-  ~/Library/Python/3.13/bin/uv run --python .venv/bin/python bookmark_analyzer.py
+uv run bookmark_analyzer.py
 ```
 
 What Happens On Each Run
@@ -273,7 +271,7 @@ Troubleshooting
   ```
 
 - Ollama request failures
-  Make sure Ollama is running and that `gemma4:e2b` is installed:
+  Make sure Ollama is running and that `gemma4:e2b` or the model you want to use is installed:
 
   ```bash
   ollama pull gemma4:e2b

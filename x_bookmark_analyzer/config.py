@@ -1,7 +1,7 @@
 """Configuration and bookmark taxonomy."""
 from pathlib import Path
 
-MODEL = "gemma4:e2b"
+MODEL = "gemma4:26b"
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 CDP_URL = "http://127.0.0.1:9222"
 ENABLE_BOOKMARK_SUMMARIES = False
